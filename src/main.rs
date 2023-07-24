@@ -9,6 +9,10 @@
 
 // BasibBlock def.: https://en.wikipedia.org/wiki/Basic_block
 
+// git + github:
+// https://datacamp.com/tutorial/git-push-pullThe%20function%20end_address%20implemented%20for%20BasicBlock%20struct.
+// https://training.github.com/downloads/github-git-cheat-sheet/
+
 
 // "rop"-olni
 
