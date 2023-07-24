@@ -234,6 +234,38 @@ impl BasicBlock {
     }
 
 
+    // BasicBlock + va -> cut the BB into two BBs at next_valid_instr(va)
+    // the second block starts at next_valid_instr(va)
+    fn cut_block(self, va: u64) -> Vec<BasicBlock> {
+
+        let valid_va = self.next_valid_instr(va);
+        match valid_va {
+            Ok(addr) => {
+                if self.address < addr && addr <= self.end_address() {
+                    let cut_index = self.instructions.iter().position(|&x| x.ip() == addr).unwrap();
+                    vec![
+                        BasicBlock {
+                            address: self.address,
+                            instructions: self.instructions[..cut_index].to_vec(),
+                            targets: vec![addr],
+                        },
+                        BasicBlock{
+                            address: addr,
+                            instructions: self.instructions[cut_index..].to_vec(),
+                            targets: self.targets,
+                        }
+                    ]
+                } else {
+                    vec![self]
+                }
+            }
+            Err(_) => {
+                vec![self]
+            }
+
+        }
+
+    }
 
     
 
