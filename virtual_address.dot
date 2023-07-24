@@ -1,0 +1,10 @@
+digraph control_flow {
+    N0x8840[label="address:\n       0000000000008840\nbasic block:\n      0000000000008840: lea rdi,[4f028h]\n      0000000000008847: lea rax,[4f028h]\n      000000000000884e: cmp rax,rdi\n      0000000000008851: je short 8868h\ntarget(s):\n      0000000000008853\n      0000000000008868\n"];
+    N0x8853[label="address:\n       0000000000008853\nbasic block:\n      0000000000008853: mov rax,[4e9f8h]\n      000000000000885a: test rax,rax\n      000000000000885d: je short 8868h\ntarget(s):\n      000000000000885f\n      0000000000008868\n"];
+    N0x885f[label="address:\n       000000000000885f\nbasic block:\n      000000000000885f: jmp rax\ntarget(s):\n"];
+    N0x8868[label="address:\n       0000000000008868\nbasic block:\n      0000000000008868: ret\ntarget(s):\n"];
+    N0x8840 -> N0x8853[label=""];
+    N0x8840 -> N0x8868[label=""];
+    N0x8853 -> N0x885f[label=""];
+    N0x8853 -> N0x8868[label=""];
+}
