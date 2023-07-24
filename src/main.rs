@@ -214,7 +214,32 @@ impl BasicBlock {
         // instr.ip() + (instr.len() as u64)
     }
 
+    // BasicBlock + va -> address of the next valid instruction (if va = start then itself)
+    fn next_valid_instr(&self, va: u64) -> Result<u64, String> {
+
+        // TODO: what if it returns the next basic block's address ??
+        let index = self.instructions.iter().position(|x| x.ip() <= va && va < x.next_ip());
+        match index {
+            Some(i) => {
+                if self.instructions[i].ip() == va {
+                    Ok(va)
+                } else {
+                    Ok(self.instructions[i].next_ip())
+                }
+            }
+            None => {
+                Err(String::from("address is outside of basic block's range error"))
+            }
+        }
+    }
+
+
+
+    
+
 }
+
+
 
 impl fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -247,6 +272,38 @@ impl fmt::Display for BasicBlock {
 
         Ok(())
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TEST: next_valid_instr() method
+    #[test]
+    fn next_valid_va() {
+
+        let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
+        let binary = Binary::from_elf(path);
+
+        let virtual_address: u64 = 0x8840;
+
+        let bb = BasicBlock::from_address(&binary, virtual_address);
+
+
+        assert_eq!(Err(String::from("address is outside of basic block's range error")), bb.next_valid_instr(0x8838));
+        assert_eq!(Err(String::from("address is outside of basic block's range error")), bb.next_valid_instr(0x8853));
+
+
+        assert_eq!(Ok(0x8847), bb.next_valid_instr(0x8842));
+        assert_eq!(Ok(0x8847), bb.next_valid_instr(0x8846));
+        assert_eq!(Ok(0x884e), bb.next_valid_instr(0x8849));
+        assert_eq!(Ok(0x884e), bb.next_valid_instr(0x884e));
+        assert_eq!(Ok(0x8853), bb.next_valid_instr(0x8852));
+    }
+
+
+
 }
 
 // PART 03A: Control flow graph
