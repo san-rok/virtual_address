@@ -201,6 +201,15 @@ impl BasicBlock {
         bb
 
     }
+
+    // BasicBlock -> address of the last byte
+    // maybe: address of the next instruction ??
+    fn end_address(&self) -> u64 {
+        let instr: Instruction = *(self.instructions).iter().last().unwrap();
+        instr.next_ip() - 1
+        // instr.ip() + (instr.len() as u64)
+    }
+
 }
 
 impl fmt::Display for BasicBlock {
@@ -408,7 +417,6 @@ fn main() {
     let virtual_address: u64 = 0x8840;
     // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e
 
-    
     let graph: Graph = Graph::from_address(&binary, virtual_address);
 
     let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
