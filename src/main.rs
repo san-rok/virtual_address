@@ -352,13 +352,13 @@ mod tests {
 
 // PART 03A: Control flow graph
 
-struct Graph {
+struct ControlFlowGraph {
     address: u64,
     blocks: Vec<BasicBlock>,
 }
 
 
-impl Graph {
+impl ControlFlowGraph {
 
     // explore control flow graph from a given virtual address (using DFS)
     fn from_address(binary: &Binary, va: u64) -> Self {
@@ -410,7 +410,7 @@ impl Graph {
             }
         }
 
-        Graph{
+        ControlFlowGraph{
             address: va,
             blocks: blocks.into_values().collect(),
         }
@@ -435,7 +435,7 @@ impl Graph {
 
 
 
-impl<'a> dot2::Labeller<'a> for Graph {
+impl<'a> dot2::Labeller<'a> for ControlFlowGraph {
     type Node = u64;
     type Edge = (u64, u64);
     type Subgraph = ();
@@ -462,7 +462,7 @@ impl<'a> dot2::Labeller<'a> for Graph {
 }
 
 
-impl<'a> dot2::GraphWalk<'a> for Graph {
+impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
     type Node = u64;
     type Edge = (u64, u64);
     type Subgraph = ();
@@ -511,7 +511,7 @@ fn main() {
     let virtual_address: u64 =  0x88f0;
     // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x8840
 
-    let graph: Graph = Graph::from_address(&binary, virtual_address);
+    let graph: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
     println!("address: {:016x}", graph.address());
     for block in graph.blocks() {
@@ -527,6 +527,10 @@ fn main() {
 
 // PART 03B: list of instructions
 // hint: use petgraph crate: https://docs.rs/petgraph/latest/petgraph/algo/dominators/index.html
+
+
+
+
 // why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
 // basic block scheduling; dominator tree
 
