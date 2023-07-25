@@ -38,6 +38,7 @@
 // crates
 
 use goblin::elf::*;
+use petgraph::algo::dominators::simple_fast;
 use std::fs::File;
 use std::io::Read;
 // use std::ops::Range;
@@ -513,32 +514,37 @@ fn main() {
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
-    /*
-    println!("address: {:016x}", cfg.address());
+    let mut dictionary: Vec<NodeIndex> = Vec::new();
+
+    let mut graph = Graph::<&BasicBlock, ()>::new();
     for block in cfg.blocks() {
-        println!("{}", block);
+        let node = graph.add_node(block);
+        dictionary.push(node);
     }
-    */
 
-    // let mut graph: Graph<&BasicBlock, (u64,u64)> = Graph::new();
-
-    let mut edges: Vec<(u32, u32)> = Vec::new();
-    for block in cfg.blocks() {
-        let source: u32 = block.address() as u32;
-        for target in block.targets() {
-            edges.push((source, *target as u32));
+    
+    for node in dictionary {
+        for target in graph.node_weight(node).unwrap().targets() {
+            let n = graph.node_indices().find(|i| graph.node_weight(*i).unwrap().address() == *target).unwrap();
+            graph.add_edge(node, n, ());
         }
     }
 
-    let edges: &[(u32, u32)] = &edges[..];
+    let dominators = simple_fast(&graph, 0.into());
+
+    println!("{:#x?}", dominators);
+
+    // TBC
 
 
-    let mut graph = Graph::<(), ()>::new();
-    graph.extend_with_edges(edges);
+    // let mut graph = Graph::<u32, (u32, u32)>::from_edges(edges);
+    // graph.extend_with_edges(edges);
+
+    // println!("{:#x?}", graph);
 
     // type: u32 !!!!
 
-    // TBC
+    
     // let graph = DiGraph::<u64, (u64, u64)>::from_edges(&edges[..]);
     // https://stackoverflow.com/questions/75910939/error-with-type-annotation-in-variable-when-using-petgraph
 
