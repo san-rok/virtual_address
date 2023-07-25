@@ -47,6 +47,8 @@ use std::fmt;
 
 use iced_x86::*;
 
+use std::collections::BTreeMap;
+
 // PART 01: Binary struct
 
 struct Binary {
@@ -268,6 +270,16 @@ impl BasicBlock {
     }
 
     
+    // BasicBlock -> address (u64)
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    // BasicBlock -> targets (&[u64])
+    fn targets(&self) -> &[u64] {
+        &self.targets
+    }
+
 
 }
 
@@ -340,103 +352,80 @@ mod tests {
 
 // PART 03A: Control flow graph
 
-fn from_address_to_bbvec(binary: &Binary, va: u64) -> Vec<BasicBlock> {
-
-    let mut blocks: Vec<BasicBlock> = Vec::new();
-
-    let mut addresses: Vec<u64> = Vec::new();
-
-    addresses.push(va);
-
-    while let Some(address) = addresses.pop() {
-
-        let bb = BasicBlock::from_address(binary, address);
-
-        // how to use bb.targets directly ?
-        let mut targets: Vec<u64>  = bb.targets.iter().copied().collect();
-
-        blocks.push(bb);
-
-        while let Some(target) = targets.pop() {
-
-            let cut_block = 
-                    blocks.iter()
-                            .position(|x| x.address < target && target <= x.address + (x.instructions.len() as u64));
-                            // TODO: x.instruction.len() - not correct!
-
-            match cut_block {
-                Some(i) => {
-                    let tmp_block = blocks.remove(i);
-                        
-                    let cut_instr = tmp_block.instructions.iter().position(|&x| x.ip() == target);
-
-                    match cut_instr {
-                        Some(j) => {
-
-                            blocks.push(
-                                BasicBlock {
-                                    address: address,
-                                    instructions: tmp_block.instructions[..j].to_vec(),
-                                    targets: vec![target],
-                                }
-                            );
-
-                            blocks.push(
-                                BasicBlock{
-                                    address: target,
-                                    instructions: tmp_block.instructions[j..].to_vec(),
-                                    targets: tmp_block.targets,
-                                }
-                            );
-                        }
-                        None => {
-                            // TODO: ??
-                            // 
-                        }
-                    }
-                }
-                None => {
-                    if !addresses.contains(&target) {
-                        addresses.push(target);
-                    }
-                }
-            }             
-        }
-    }
-
-    blocks
-
-}
-
 struct Graph {
-    nodes: Vec<u64>,
-    edges: Vec<(u64, u64)>,
+    address: u64,
     blocks: Vec<BasicBlock>,
 }
 
+
 impl Graph {
 
+    // explore control flow graph from a given virtual address (using DFS)
     fn from_address(binary: &Binary, va: u64) -> Self {
 
-        let blocks: Vec<BasicBlock> = from_address_to_bbvec(binary, va);
-        let mut nodes: Vec<u64> = Vec::new();
-        let mut edges: Vec<(u64, u64)> = Vec::new();
+        let mut blocks: BTreeMap<u64, BasicBlock> = BTreeMap::new();
+        let mut addresses: Vec<u64> = Vec::new();
+    
+        addresses.push(va);
+    
+        while let Some(address) = addresses.pop() {
+    
+            let bb = BasicBlock::from_address(binary, address);
+    
+            // is this clone too much?
+            let mut targets  = bb.targets().to_vec();
+    
+            blocks.insert(bb.address(), bb);
+    
+            while let Some(target) = targets.pop() {
+    
+                let cut = blocks
+                    .range(..target)
+                    .next_back()
+                    .map(|(&x, _)| x);
 
-        for block in &blocks {
-            nodes.push( block.address );
-            
-            for target in &block.targets {
-                edges.push( (block.address, *target ));
+                match cut {
+                    Some(addr) => {
+
+                        if target <= blocks.get(&addr).unwrap().end_address() {
+
+                            let tmp_block = blocks.remove(&addr).unwrap();
+                            let cut_blocks = tmp_block.cut_block(target);
+                            for i in cut_blocks {
+                                blocks.insert(i.address(), i);
+                            }
+                        } else {
+                            if !addresses.contains(&target) {
+                                addresses.push(target);
+                            }
+                        }                        
+                    }
+                    // this None is possible
+                    None => {
+                        if !addresses.contains(&target) {
+                            addresses.push(target);
+                        }
+                    }
+                }          
             }
         }
 
-        Graph {
-            nodes,
-            edges,
-            blocks,
+        Graph{
+            address: va,
+            blocks: blocks.into_values().collect(),
         }
     }
 
+    // Graph -> address (u64)
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    // Graph -> blocks (&[BasicBlock])
+    fn blocks(&self) -> &[BasicBlock] {
+        &self.blocks
+    }
+    
     // from graph to .dot
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
@@ -445,56 +434,68 @@ impl Graph {
 }
 
 
+
 impl<'a> dot2::Labeller<'a> for Graph {
     type Node = u64;
-    type Edge = &'a (u64, u64);
+    type Edge = (u64, u64);
     type Subgraph = ();
 
+    // .dot compatible identifier naming the graph
     fn graph_id(&'a self) -> dot2::Result<dot2::Id<'a>> {
         dot2::Id::new("control_flow")
     }
 
+    // maps n to unique (valid .dot) identifier 
     fn node_id(&'a self, n: &Self::Node) -> dot2::Result<dot2::Id<'a>> {
         dot2::Id::new(format!("N0x{:x}", n))
     }
 
+    // labels of nodes
     fn node_label(&'a self, n: &Self::Node) -> dot2::Result<dot2::label::Text<'a>> {
-        let index = self.nodes.iter().position(|v| v == n).unwrap();
-        let label = format!("{}", self.blocks[index]);
+        let label = self.blocks.iter().find(|&v| v.address() == *n).map(|v| format!("{}", v)).unwrap();
+
         Ok(dot2::label::Text::LabelStr(
             label.into()
-            // format!("{}", self.blocks[index]).as_str().into()
-            // self.labels[index].as_str().into()
         ))
     }
 
-    // edge labels?
 }
 
 
 impl<'a> dot2::GraphWalk<'a> for Graph {
     type Node = u64;
-    type Edge = &'a (u64, u64);
+    type Edge = (u64, u64);
     type Subgraph = ();
 
-
-    fn nodes(&'a self) -> dot2::Nodes<'a, Self::Node> {
-        self.nodes.iter().map(|n| *n).collect()
+    // all nodes of the graph
+    fn nodes(&self) -> dot2::Nodes<'a, Self::Node> {
+        self.blocks().iter().map(|n| n.address()).collect()
     }
 
-
+    // all edges of the graph
     fn edges(&'a self) -> dot2::Edges<'a, Self::Edge> {
-        self.edges.iter().collect()
+
+        let mut edges: Vec<(u64, u64)> = Vec::new();
+
+        for block in self.blocks() {
+            let source = block.address();
+            for target in block.targets() {
+                edges.push( (source, *target) );
+            }
+        }
+
+        edges.into_iter().collect()
     }
 
-
-    fn source(&'a self, edge: &Self::Edge) -> Self::Node {
-        let & &(s,_) = edge;
+    // source node for the given edge
+    fn source(&self, edge: &Self::Edge) -> Self::Node {
+        let &(s,_) = edge;
         s
     }
 
-    fn target(&'a self, edge: &Self::Edge) -> Self::Node {
-        let & &(_,t) = edge;
+    // target node for the given edge
+    fn target(&self, edge: &Self::Edge) -> Self::Node {
+        let &(_,t) = edge;
         t
     }
 
@@ -507,13 +508,19 @@ fn main() {
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
-    let virtual_address: u64 = 0x8840;
-    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e
+    let virtual_address: u64 =  0x88f0;
+    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x8840
 
     let graph: Graph = Graph::from_address(&binary, virtual_address);
 
+    println!("address: {:016x}", graph.address());
+    for block in graph.blocks() {
+        println!("{}", block);
+    }
+
     let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
     graph.render_to(&mut f).unwrap();
+    // dot -Tsvg virtual_address.dot > virtual_address.svg
 
 }
 
@@ -1287,9 +1294,178 @@ impl<'a> dot2::GraphWalk<'a> for Graph {
 
  */
 
+/*
+
+fn from_address_to_bbvec(binary: &Binary, va: u64) -> Vec<BasicBlock> {
+
+    let mut blocks: Vec<BasicBlock> = Vec::new();
+
+    let mut addresses: Vec<u64> = Vec::new();
+
+    addresses.push(va);
+
+    while let Some(address) = addresses.pop() {
+
+        let bb = BasicBlock::from_address(binary, address);
+
+        // how to use bb.targets directly ?
+        let mut targets: Vec<u64>  = bb.targets.iter().copied().collect();
+
+        blocks.push(bb);
+
+        while let Some(target) = targets.pop() {
+
+            let cut_block = 
+                    blocks.iter()
+                            .position(|x| x.address < target && target <= x.address + (x.instructions.len() as u64));
+                            // TODO: x.instruction.len() - not correct!
+
+            match cut_block {
+                Some(i) => {
+                    let tmp_block = blocks.remove(i);
+                        
+                    let cut_instr = tmp_block.instructions.iter().position(|&x| x.ip() == target);
+
+                    match cut_instr {
+                        Some(j) => {
+
+                            blocks.push(
+                                BasicBlock {
+                                    address: address,
+                                    instructions: tmp_block.instructions[..j].to_vec(),
+                                    targets: vec![target],
+                                }
+                            );
+
+                            blocks.push(
+                                BasicBlock{
+                                    address: target,
+                                    instructions: tmp_block.instructions[j..].to_vec(),
+                                    targets: tmp_block.targets,
+                                }
+                            );
+                        }
+                        None => {
+                            // TODO: ??
+                            // 
+                        }
+                    }
+                }
+                None => {
+                    if !addresses.contains(&target) {
+                        addresses.push(target);
+                    }
+                }
+            }             
+        }
+    }
+
+    blocks
+
+}
+
+struct Graph {
+    nodes: Vec<u64>,
+    edges: Vec<(u64, u64)>,
+    blocks: Vec<BasicBlock>,
+}
+
+impl Graph {
+
+    fn from_address(binary: &Binary, va: u64) -> Self {
+
+        let blocks: Vec<BasicBlock> = from_address_to_bbvec(binary, va);
+        let mut nodes: Vec<u64> = Vec::new();
+        let mut edges: Vec<(u64, u64)> = Vec::new();
+
+        for block in &blocks {
+            nodes.push( block.address );
+            
+            for target in &block.targets {
+                edges.push( (block.address, *target ));
+            }
+        }
+
+        Graph {
+            nodes,
+            edges,
+            blocks,
+        }
+    }
+
+    // from graph to .dot
+    fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
+        dot2::render(self, output)
+    }
+
+}
+
+
+impl<'a> dot2::Labeller<'a> for Graph {
+    type Node = u64;
+    type Edge = &'a (u64, u64);
+    type Subgraph = ();
+
+    fn graph_id(&'a self) -> dot2::Result<dot2::Id<'a>> {
+        dot2::Id::new("control_flow")
+    }
+
+    fn node_id(&'a self, n: &Self::Node) -> dot2::Result<dot2::Id<'a>> {
+        dot2::Id::new(format!("N0x{:x}", n))
+    }
+
+    fn node_label(&'a self, n: &Self::Node) -> dot2::Result<dot2::label::Text<'a>> {
+        let index = self.nodes.iter().position(|v| v == n).unwrap();
+        let label = format!("{}", self.blocks[index]);
+        Ok(dot2::label::Text::LabelStr(
+            label.into()
+            // format!("{}", self.blocks[index]).as_str().into()
+            // self.labels[index].as_str().into()
+        ))
+    }
+
+    // edge labels?
+}
+
+
+impl<'a> dot2::GraphWalk<'a> for Graph {
+    type Node = u64;
+    type Edge = &'a (u64, u64);
+    type Subgraph = ();
+
+
+    fn nodes(&'a self) -> dot2::Nodes<'a, Self::Node> {
+        self.nodes.iter().map(|n| *n).collect()
+    }
+
+
+    fn edges(&'a self) -> dot2::Edges<'a, Self::Edge> {
+        self.edges.iter().collect()
+    }
+
+
+    fn source(&'a self, edge: &Self::Edge) -> Self::Node {
+        let & &(s,_) = edge;
+        s
+    }
+
+    fn target(&'a self, edge: &Self::Edge) -> Self::Node {
+        let & &(_,t) = edge;
+        t
+    }
+
+}
 
 
 
+*/
+
+/*
+let cut = blocks
+    .iter()
+    .find(|(&x,y)| x < *target && target <= &y.end_address() )
+    .map(|(&x, _)| x);
+*/
 
 
 

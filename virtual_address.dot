@@ -1,10 +1,14 @@
 digraph control_flow {
-    N0x8840[label="address:\n       0000000000008840\nbasic block:\n      0000000000008840: lea rdi,[4f028h]\n      0000000000008847: lea rax,[4f028h]\n      000000000000884e: cmp rax,rdi\n      0000000000008851: je short 8868h\ntarget(s):\n      0000000000008853\n      0000000000008868\n"];
-    N0x8853[label="address:\n       0000000000008853\nbasic block:\n      0000000000008853: mov rax,[4e9f8h]\n      000000000000885a: test rax,rax\n      000000000000885d: je short 8868h\ntarget(s):\n      000000000000885f\n      0000000000008868\n"];
-    N0x885f[label="address:\n       000000000000885f\nbasic block:\n      000000000000885f: jmp rax\ntarget(s):\n"];
-    N0x8868[label="address:\n       0000000000008868\nbasic block:\n      0000000000008868: ret\ntarget(s):\n"];
-    N0x8840 -> N0x8853[label=""];
-    N0x8840 -> N0x8868[label=""];
-    N0x8853 -> N0x885f[label=""];
-    N0x8853 -> N0x8868[label=""];
+    N0x8870[label="address:\n       0000000000008870\nbasic block:\n      0000000000008870: lea rdi,[4f028h]\n      0000000000008877: lea rsi,[4f028h]\n      000000000000887e: sub rsi,rdi\n      0000000000008881: mov rax,rsi\n      0000000000008884: shr rsi,3fh\n      0000000000008888: sar rax,3\n      000000000000888c: add rsi,rax\n      000000000000888f: sar rsi,1\n      0000000000008892: je short 88a8h\ntarget(s):\n      0000000000008894\n      00000000000088a8\n"];
+    N0x8894[label="address:\n       0000000000008894\nbasic block:\n      0000000000008894: mov rax,[4ef98h]\n      000000000000889b: test rax,rax\n      000000000000889e: je short 88a8h\ntarget(s):\n      00000000000088a0\n      00000000000088a8\n"];
+    N0x88a0[label="address:\n       00000000000088a0\nbasic block:\n      00000000000088a0: jmp rax\ntarget(s):\n"];
+    N0x88a8[label="address:\n       00000000000088a8\nbasic block:\n      00000000000088a8: ret\ntarget(s):\n"];
+    N0x88f0[label="address:\n       00000000000088f0\nbasic block:\n      00000000000088f0: endbr64\n      00000000000088f4: jmp near ptr 8870h\ntarget(s):\n      00000000000088f9\n      0000000000008870\n"];
+    N0x88f9[label="address:\n       00000000000088f9\nbasic block:\n      00000000000088f9: nop dword ptr [rax]\n      0000000000008900: sub rsp,18h\n      0000000000008904: mov [rsp+10h],rdi\n      0000000000008909: call 8b10h\n      000000000000890e: add rsp,18h\n      0000000000008912: ret\ntarget(s):\n"];
+    N0x8870 -> N0x8894[label=""];
+    N0x8870 -> N0x88a8[label=""];
+    N0x8894 -> N0x88a0[label=""];
+    N0x8894 -> N0x88a8[label=""];
+    N0x88f0 -> N0x88f9[label=""];
+    N0x88f0 -> N0x8870[label=""];
 }
