@@ -32,13 +32,15 @@
 
 // dominator graph - control flow graph
 
+// multi-thread: locks adn dead-locks
+
 
 // dot -Tsvg virtual_address.dot > virtual_address.svg
 
 // crates
 
 use goblin::elf::*;
-use petgraph::algo::dominators::simple_fast;
+use petgraph::algo::dominators::*;
 use std::fs::File;
 use std::io::Read;
 // use std::ops::Range;
@@ -48,7 +50,7 @@ use std::fmt;
 
 use iced_x86::*;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 // PART 01: Binary struct
 
@@ -127,7 +129,7 @@ impl Binary {
 
 // PART 02: Basic block
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct BasicBlock {
     address: u64,
     instructions: Vec<Instruction>,
@@ -352,7 +354,6 @@ mod tests {
 }
 
 // PART 03A: Control flow graph
-
 struct ControlFlowGraph {
     address: u64,
     blocks: Vec<BasicBlock>,
@@ -384,30 +385,21 @@ impl ControlFlowGraph {
                     .range(..target)
                     .next_back()
                     .map(|(&x, _)| x);
-
+                
                 match cut {
-                    Some(addr) => {
-
-                        if target <= blocks.get(&addr).unwrap().end_address() {
-
-                            let tmp_block = blocks.remove(&addr).unwrap();
-                            let cut_blocks = tmp_block.cut_block(target);
-                            for i in cut_blocks {
-                                blocks.insert(i.address(), i);
-                            }
-                        } else {
-                            if !addresses.contains(&target) {
-                                addresses.push(target);
-                            }
-                        }                        
-                    }
-                    // this None is possible
-                    None => {
+                    Some(addr) if target <= blocks.get(&addr).unwrap().end_address() => {
+                        let tmp_block = blocks.remove(&addr).unwrap();
+                        let cut_blocks = tmp_block.cut_block(target);
+                        for i in cut_blocks {
+                            blocks.insert(i.address(), i);
+                        }
+                    } 
+                    _ => {
                         if !addresses.contains(&target) {
                             addresses.push(target);
                         }
                     }
-                }          
+                }
             }
         }
 
@@ -433,7 +425,6 @@ impl ControlFlowGraph {
     }
 
 }
-
 
 
 impl<'a> dot2::Labeller<'a> for ControlFlowGraph {
@@ -504,54 +495,70 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
 
 
+impl petgraph::visit::GraphBase for ControlFlowGraph {
+    type NodeId = u64;
+    type EdgeId = (u64, u64);
+}
+
+// impl petgraph::visit::GraphRef for ControlFlowGraph {}
+
+impl petgraph::visit::IntoNeighbors for &ControlFlowGraph {
+    // type Neighbors = core::slice::Iter<'a, Self::NodeId>
+    // here Iterator<Item = Self::NodeId> expects: u64, but obtains: &u64
+    // how to solve?
+    type Neighbors = std::vec::IntoIter<Self::NodeId>;
+
+
+    fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
+        let targets = 
+        (*self)
+            .blocks().iter()
+            .find(|x| x.address() == a)
+            .map(|x| x.targets()).unwrap().to_vec().into_iter();
+        targets
+    }
+}
+
+
+impl petgraph::visit::Visitable for ControlFlowGraph {
+    type Map = HashSet<Self::NodeId>;
+
+    fn visit_map(&self) -> Self::Map {
+        HashSet::with_capacity(self.blocks().len())
+    }
+
+    fn reset_map(&self, map: &mut Self::Map) {
+        map.clear()
+    }
+}
+
+
+
 fn main() {
 
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
     let virtual_address: u64 =  0x8840;
-    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0
+    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
-    let mut dictionary: Vec<NodeIndex> = Vec::new();
-
-    let mut graph = Graph::<&BasicBlock, ()>::new();
-    for block in cfg.blocks() {
-        let node = graph.add_node(block);
-        dictionary.push(node);
-    }
-
-    
-    for node in dictionary {
-        for target in graph.node_weight(node).unwrap().targets() {
-            let n = graph.node_indices().find(|i| graph.node_weight(*i).unwrap().address() == *target).unwrap();
-            graph.add_edge(node, n, ());
-        }
-    }
-
-    let dominators = simple_fast(&graph, 0.into());
+    let dominators = simple_fast(&cfg, virtual_address);
 
     println!("{:#x?}", dominators);
 
-    // TBC
+    for node in cfg.blocks() {
+        let nodelabel = node.address();
+        if nodelabel != cfg.address() {
+            println!("the immediate dominator of {:x} is: {:x}", nodelabel, dominators.immediate_dominator(nodelabel).unwrap())
+        }
+        
+    }
 
 
-    // let mut graph = Graph::<u32, (u32, u32)>::from_edges(edges);
-    // graph.extend_with_edges(edges);
-
-    // println!("{:#x?}", graph);
-
-    // type: u32 !!!!
-
-    
-    // let graph = DiGraph::<u64, (u64, u64)>::from_edges(&edges[..]);
-    // https://stackoverflow.com/questions/75910939/error-with-type-annotation-in-variable-when-using-petgraph
-
-
-
-    // let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
-    // cfg.render_to(&mut f).unwrap();
+    let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
+    cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
 
@@ -563,8 +570,8 @@ fn main() {
 // PART 03B: list of instructions
 // hint: use petgraph crate: https://docs.rs/petgraph/latest/petgraph/algo/dominators/index.html
 
-use petgraph::graph::*;
-use petgraph::algo::dominators;
+
+
 
 
 // why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
@@ -594,6 +601,47 @@ use petgraph::algo::dominators;
 
 //////// JUNK ////////
 
+/*
+let mut dictionary: Vec<NodeIndex> = Vec::new();
+let mut graph = Graph::<&BasicBlock, ()>::new();
+for block in cfg.blocks() {
+    let node = graph.add_node(block);
+    dictionary.push(node);
+}
+
+for node in dictionary {
+    for target in graph.node_weight(node).unwrap().targets() {
+        let n = graph.node_indices().find(|i| graph.node_weight(*i).unwrap().address() == *target).unwrap();
+        graph.add_edge(node, n, ());
+    }
+}
+let dominators = simple_fast(&graph, 0.into());
+println!("{:#x?}", dominators);
+*/
+
+/*
+match cut {
+    Some(addr) => {
+        if target <= blocks.get(&addr).unwrap().end_address() {
+            let tmp_block = blocks.remove(&addr).unwrap();
+            let cut_blocks = tmp_block.cut_block(target);
+            for i in cut_blocks {
+                blocks.insert(i.address(), i);
+            }
+        } else {
+            if !addresses.contains(&target) {
+                addresses.push(target);
+            }
+        }                        
+    }
+    // this None is possible
+    None => {
+        if !addresses.contains(&target) {
+            addresses.push(target);
+        }
+    }
+}
+*/
 
 
 
