@@ -500,7 +500,6 @@ impl petgraph::visit::GraphBase for ControlFlowGraph {
     type EdgeId = (u64, u64);
 }
 
-// impl petgraph::visit::GraphRef for ControlFlowGraph {}
 
 impl petgraph::visit::IntoNeighbors for &ControlFlowGraph {
     // type Neighbors = core::slice::Iter<'a, Self::NodeId>
@@ -576,6 +575,7 @@ fn main() {
 
 // why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
 // basic block scheduling; dominator tree
+// https://stackoverflow.com/questions/39613095/minimize-amount-of-jumps-when-compiling-to-assembly
 
 
 
