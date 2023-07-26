@@ -18,6 +18,8 @@
 
 // aida 
 
+// simba vs gamba
+
 // p_offset - a file kezdetétől nézve hol található az adott program
 // p_vaddr - az adott program kedzeti virtual address-eSándor Rokob
 
@@ -576,6 +578,7 @@ fn main() {
 // why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
 // basic block scheduling; dominator tree
 // https://stackoverflow.com/questions/39613095/minimize-amount-of-jumps-when-compiling-to-assembly
+// https://www.cs.cornell.edu/courses/cs6120/2019fa/blog/codestitcher/
 
 
 
