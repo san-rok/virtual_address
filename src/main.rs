@@ -285,6 +285,11 @@ impl BasicBlock {
         &self.targets
     }
 
+    // BasicBlock -> instructions (&[Instruction])
+    fn instructions(&self)-> &[Instruction] {
+        &self.instructions
+    }
+
 
 }
 
@@ -426,6 +431,19 @@ impl ControlFlowGraph {
         dot2::render(self, output)
     }
 
+    // new
+    fn new(va: u64) -> Self {
+        Self {
+            address: va,
+            blocks: Vec::new(),
+        }
+    }
+
+    // push in a new block - for a control flow graph it is not necessary
+    fn push(&mut self, block: BasicBlock) -> () {
+        self.blocks.push(block);
+    }
+
 }
 
 
@@ -503,22 +521,38 @@ impl petgraph::visit::GraphBase for ControlFlowGraph {
 }
 
 
-impl petgraph::visit::IntoNeighbors for &ControlFlowGraph {
+impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
     // type Neighbors = core::slice::Iter<'a, Self::NodeId>
     // here Iterator<Item = Self::NodeId> expects: u64, but obtains: &u64
     // how to solve?
-    type Neighbors = std::vec::IntoIter<Self::NodeId>;
+    // type Neighbors = std::vec::IntoIter<Self::NodeId>;
+    type Neighbors = std::iter::Copied<std::slice::Iter<'a, u64>>;
 
+    // type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
 
+    
+    // TODO: binary search !!
+    // e.g.: order the blocks when CFG is generated!
+    // or use BTM os HashMap
     fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
-        let targets = 
+        // let targets = 
         (*self)
             .blocks().iter()
             .find(|x| x.address() == a)
-            .map(|x| x.targets()).unwrap().to_vec().into_iter();
-        targets
+            .map(|x| x.targets()).unwrap().iter().copied()
+        // targets
     }
 }
+
+/*
+fn h<V: Eq>(v: V) -> impl Eq{
+    v == v
+}
+
+fn h2(v: impl Eq) -> bool {
+    v == v
+}
+*/
 
 
 impl petgraph::visit::Visitable for ControlFlowGraph {
@@ -540,12 +574,16 @@ fn main() {
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
-    let virtual_address: u64 =  0x8840;
+    let virtual_address: u64 =  0x8c81;
     // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
     let dominators = simple_fast(&cfg, virtual_address);
+
+    let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
+    cfg.render_to(&mut f).unwrap();
+    // dot -Tsvg virtual_address.dot > virtual_address.svg
 
     println!("{:#x?}", dominators);
 
@@ -558,9 +596,30 @@ fn main() {
     }
 
 
-    let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
-    cfg.render_to(&mut f).unwrap();
+    // ControlFlowGraph as DominatorTree - not correct yet
+    let mut dom_tree: ControlFlowGraph = ControlFlowGraph::new(virtual_address);
+    for block in cfg.blocks(){
+        let node = block.address();
+        // let instr: Vec<Instruction> = block.instructions().to_vec();
+        let targets: Vec<u64> = dominators.immediately_dominated_by(node).collect();
+        let bb = BasicBlock{
+            address: node,
+            instructions: block.instructions().to_vec(),
+            targets: targets,
+        };
+        dom_tree.push(bb);
+    }
+
+    let mut f2 = std::fs::File::create("/home/san-rok/projects/virtual_address/dominator.dot").unwrap();
+    dom_tree.render_to(&mut f2).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
+
+
+
+
+
+
+    
 
 
 
