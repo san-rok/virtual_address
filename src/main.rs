@@ -57,6 +57,7 @@ use iced_x86::*;
 
 use std::collections::BTreeMap;
 // use std::collections::HashSet;
+use std::collections::HashMap;
 
 use std::cmp::*;
 
@@ -649,6 +650,7 @@ impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
 */
 
 // in the ordering of the block only the number of instructions matter
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct NoInstrBasicBlock {
     address: u64,
     len: usize,
@@ -681,6 +683,7 @@ impl NoInstrBasicBlock {
 
 }
 
+#[derive(Debug)]
 struct VirtualAddressGraph {
     address: u64,
     nodes: Vec<NoInstrBasicBlock>,
@@ -708,6 +711,65 @@ impl VirtualAddressGraph {
 
     fn nodes(&self) -> &[NoInstrBasicBlock] {
         &self.nodes
+    }
+
+    // generates the condensed vag - using petgraph::algo::tarjan_scc
+    fn condense(&self) -> Self {
+        
+        // tarjan_scc returns reversed topological order
+        let scc = tarjan_scc(self);
+
+        // the node label for a sc component = first node's label in tarjan's output
+        // the dictionary is stored in a HashMap -> effectiveness ?
+        let mut comp_dict: HashMap<u64, u64> = HashMap::new();
+        for comp in &scc {
+            let value = comp[0];
+            for node in comp {
+                comp_dict.insert(*node, value);
+            }
+        }
+
+        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+        for comp in &scc {
+        
+            let address: u64 = comp[0];
+            let mut length: usize = 0;
+            let mut targets: Vec<u64> = Vec::new();
+
+            for node in comp {
+
+                let pos = self
+                    .nodes()
+                    .binary_search_by(|block| block.address().cmp(&node))
+                    .unwrap();
+                let node = &self.nodes()[pos];
+
+                length = length + node.len();
+
+                for target in node.targets() {
+                    if !(comp.contains(target) || targets.contains(target)) {
+                        targets.push( *(comp_dict.get(target).unwrap()) );
+                    }
+                }   
+            }
+
+            nodes.push(
+                NoInstrBasicBlock { 
+                    address: address, 
+                    len: length, 
+                    targets: targets,
+                }
+            );
+        }
+
+        // for later use: sort by address
+        nodes.sort();
+
+        VirtualAddressGraph { 
+            address: self.address(),
+            nodes: nodes,
+        }
     }
 
 }
@@ -782,17 +844,14 @@ fn main() {
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
-
-
-
+    println!("{:#x?}", vag);
     
     let scc = tarjan_scc(&vag);
-
     println!("{:#x?}", scc);
-    
 
 
-
+    let condensed = vag.condense();
+    println!("{:#x?}", condensed);
 
 }
 
@@ -923,9 +982,61 @@ match cut {
 }
 */
 
+/*
+
+let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
+    for comp in &scc {
+        let value = comp[0];
+        for node in comp {
+            component_dictionary.insert(*node, value);
+        }
+    }
+
+    let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+    for component in &scc {
+        let address: u64 = component[0];
+
+        let mut length: usize = 0;
+        let mut targets: Vec<u64> = Vec::new();
+
+        for node in component {
+
+            let pos = vag
+                .nodes()
+                .binary_search_by(|block| block.address().cmp(&node))
+                .unwrap();
+            let node = &vag.nodes()[pos];
+
+            length = length + node.len();
+
+            for target in node.targets() {
+                if !(component.contains(target) || targets.contains(target)) {
+                    targets.push( *(component_dictionary.get(target).unwrap()) );
+                }
+            }
+        }
 
 
 
+        nodes.push(
+            NoInstrBasicBlock { 
+                address: address, 
+                len: length, 
+                targets: targets,
+            }
+        );
+    }
+
+    nodes.reverse();
+
+    let condensed: VirtualAddressGraph = VirtualAddressGraph { 
+        address: virtual_address,
+        nodes: nodes,
+    };
+
+
+*/
 
 
 
