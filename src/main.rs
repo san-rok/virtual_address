@@ -477,7 +477,14 @@ impl ControlFlowGraph {
 
     // push in a new block - for a control flow graph it is not necessary
     fn push(&mut self, block: BasicBlock) -> () {
-        self.blocks.push(block);
+
+        match self.blocks().binary_search(&block) {
+            Ok(_) => {}
+            Err(pos) => self.blocks.insert(pos, block),
+        }
+
+        // self.blocks.push(block);
+        // self.blocks.sort();
     }
 
 }
@@ -572,11 +579,20 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
     // or use BTM or HashMap
     fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
         // let targets = 
-        (*self)
-            .blocks().iter()
-            .find(|x| x.address() == a)
-            .map(|x| x.targets()).unwrap().iter().copied()
+        // (*self)
+        //    .blocks().iter()
+        //    .find(|x| x.address() == a)
+        //    .map(|x| x.targets()).unwrap().iter().copied()
         // targets
+
+        let pos = 
+            self
+                .blocks()
+                .binary_search_by(|block| block.address().cmp(&a))
+                .unwrap();
+        self.blocks()[pos].targets().iter().copied()
+
+        // let pos = (*self).blocks().binary_search(a)
     }
 }
 
