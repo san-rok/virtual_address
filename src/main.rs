@@ -41,8 +41,11 @@
 
 // crates
 
+#![feature(impl_trait_in_assoc_type)]
+
 use goblin::elf::*;
 use petgraph::algo::dominators::*;
+use petgraph::algo::tarjan_scc;
 use std::fs::File;
 use std::io::Read;
 // use std::ops::Range;
@@ -569,9 +572,9 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
     // here Iterator<Item = Self::NodeId> expects: u64, but obtains: &u64
     // how to solve?
     // type Neighbors = std::vec::IntoIter<Self::NodeId>;
-    type Neighbors = std::iter::Copied<std::slice::Iter<'a, u64>>;
+    // type Neighbors = std::iter::Copied<std::slice::Iter<'a, u64>>;
 
-    // type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
+    type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
 
     
     // TODO: binary search !!
@@ -596,16 +599,6 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
     }
 }
 
-/*
-fn h<V: Eq>(v: V) -> impl Eq{
-    v == v
-}
-
-fn h2(v: impl Eq) -> bool {
-    v == v
-}
-*/
-
 
 impl petgraph::visit::Visitable for ControlFlowGraph {
     type Map = HashSet<Self::NodeId>;
@@ -620,13 +613,26 @@ impl petgraph::visit::Visitable for ControlFlowGraph {
 }
 
 
+impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a ControlFlowGraph {
+    // without impl trait associated type ?
+    // std::iter::Map<,...> - what is the second argument here?    
+    type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
+
+    fn node_identifiers(self) -> Self::NodeIdentifiers {
+        self.blocks().iter().map(|x| x.address())
+    }
+
+
+}
+
+
 
 fn main() {
 
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
-    let virtual_address: u64 =  0x8b29;
+    let virtual_address: u64 =  0x8840;
     // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
@@ -637,7 +643,41 @@ fn main() {
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
-    println!("{:#x?}", dominators);
+    
+    let scc = tarjan_scc(&cfg);
+
+
+
+
+
+    
+
+
+
+
+}
+
+
+// PART 03B: list of instructions
+// hint: use petgraph crate: https://docs.rs/petgraph/latest/petgraph/algo/dominators/index.html
+
+
+
+
+
+// why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
+// basic block scheduling; dominator tree
+// https://stackoverflow.com/questions/39613095/minimize-amount-of-jumps-when-compiling-to-assembly
+// https://www.cs.cornell.edu/courses/cs6120/2019fa/blog/codestitcher/
+
+
+
+
+// DOMINATORS
+
+/*
+
+println!("{:#x?}", dominators);
 
     for node in cfg.blocks() {
         let nodelabel = node.address();
@@ -671,32 +711,19 @@ fn main() {
 
 
 
-    
+*/
 
 
 
-
+/*
+fn h<V: Eq>(v: V) -> impl Eq{
+    v == v
 }
 
-
-// PART 03B: list of instructions
-// hint: use petgraph crate: https://docs.rs/petgraph/latest/petgraph/algo/dominators/index.html
-
-
-
-
-
-// why dominator tree:  Prosser, Reese T. (1959). "Applications of Boolean matrices to the analysis of flow diagrams"
-// basic block scheduling; dominator tree
-// https://stackoverflow.com/questions/39613095/minimize-amount-of-jumps-when-compiling-to-assembly
-// https://www.cs.cornell.edu/courses/cs6120/2019fa/blog/codestitcher/
-
-
-
-
-
-
-
+fn h2(v: impl Eq) -> bool {
+    v == v
+}
+*/
 
 
 
