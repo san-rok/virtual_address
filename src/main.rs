@@ -44,7 +44,7 @@
 #![feature(impl_trait_in_assoc_type)]
 
 use goblin::elf::*;
-use petgraph::algo::dominators::*;
+// use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
 use std::fs::File;
 use std::io::Read;
@@ -55,7 +55,8 @@ use std::fmt;
 
 use iced_x86::*;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
+// use std::collections::HashSet;
 
 use std::cmp::*;
 
@@ -559,8 +560,9 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
 }
 
+// petgraph traits implemented for ControlFlowGraph
 
-
+/*
 impl petgraph::visit::GraphBase for ControlFlowGraph {
     type NodeId = u64;
     type EdgeId = (u64, u64);
@@ -644,6 +646,123 @@ impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
 
 }
 
+*/
+
+// in the ordering of the block only the number of instructions matter
+struct NoInstrBasicBlock {
+    address: u64,
+    len: usize,
+    targets: Vec<u64>,
+}
+
+impl NoInstrBasicBlock {
+    
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn targets(&self) -> &[u64] {
+        &self.targets
+    }
+
+    fn from_bb(bb: &BasicBlock) -> Self {
+
+        NoInstrBasicBlock { 
+            address: bb.address(), 
+            len: bb.instructions().len(), 
+            targets: bb.targets().to_vec(),
+        }
+
+    }
+
+}
+
+struct VirtualAddressGraph {
+    address: u64,
+    nodes: Vec<NoInstrBasicBlock>,
+}
+
+impl VirtualAddressGraph {
+
+    fn from_cfg(cfg: &ControlFlowGraph) -> Self {
+        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+        for block in cfg.blocks() {
+            let node: NoInstrBasicBlock = NoInstrBasicBlock::from_bb(block);
+            nodes.push(node);
+        }
+
+        VirtualAddressGraph { 
+            address: cfg.address(), 
+            nodes: nodes,
+        }
+    }
+
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    fn nodes(&self) -> &[NoInstrBasicBlock] {
+        &self.nodes
+    }
+
+}
+
+
+impl petgraph::visit::GraphBase for VirtualAddressGraph {
+    type NodeId = u64;
+    type EdgeId = (u64, u64);
+}
+
+
+impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph {
+    type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
+
+    fn node_identifiers(self) -> Self::NodeIdentifiers {
+        self.nodes().iter().map(|x| x.address())
+    }
+}
+
+impl<'a> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph {
+    type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
+
+    fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
+
+        let pos = 
+            self
+                .nodes()
+                .binary_search_by(|block| block.address().cmp(&a))
+                .unwrap();
+        self.nodes()[pos].targets().iter().copied()
+
+    }
+}
+
+
+impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
+
+    fn node_bound(self: &Self) -> usize {
+        self.nodes().len()
+    }
+
+    fn to_index(self: &Self, a: Self::NodeId) -> usize {
+        self
+            .nodes()
+            .binary_search_by(|block| block.address().cmp(&a))
+            .unwrap()
+    }
+
+    fn from_index(self: &Self, i:usize) -> Self::NodeId {
+        assert!(i < self.nodes().len(),"the requested index {} is out-of-bounds", i);
+        self.nodes()[i].address()
+    }
+
+}
+
 
 
 fn main() {
@@ -662,15 +781,14 @@ fn main() {
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
+    let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
+
+
+
     
-    let scc = tarjan_scc(&cfg);
+    let scc = tarjan_scc(&vag);
 
     println!("{:#x?}", scc);
-
-
-
-
-
     
 
 
