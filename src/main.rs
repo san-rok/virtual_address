@@ -54,6 +54,8 @@ use iced_x86::*;
 
 use std::collections::{BTreeMap, HashSet};
 
+use std::cmp::*;
+
 // PART 01: Binary struct
 
 struct Binary {
@@ -137,6 +139,34 @@ struct BasicBlock {
     instructions: Vec<Instruction>,
     targets: Vec<u64>,
 }
+
+
+// BasicBlocks are ordered acccording to their addresses
+impl PartialEq for BasicBlock {
+
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+    }
+}
+
+impl Eq for BasicBlock {}
+
+impl Ord for BasicBlock {
+
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.address.cmp(&other.address)
+    }
+
+}
+
+impl PartialOrd for BasicBlock {
+
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+
+}
+
 
 impl BasicBlock {
 
@@ -295,6 +325,9 @@ impl BasicBlock {
 
 
 
+
+
+
 impl fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         
@@ -410,9 +443,12 @@ impl ControlFlowGraph {
             }
         }
 
+        let mut blocks: Vec<BasicBlock> = blocks.into_values().collect::<Vec<BasicBlock>>();
+        blocks.sort();
+
         ControlFlowGraph{
             address: va,
-            blocks: blocks.into_values().collect(),
+            blocks: blocks,
         }
     }
 
@@ -533,7 +569,7 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
     
     // TODO: binary search !!
     // e.g.: order the blocks when CFG is generated!
-    // or use BTM os HashMap
+    // or use BTM or HashMap
     fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
         // let targets = 
         (*self)
