@@ -1,10 +1,11 @@
 digraph control_flow {
-    N0x8840[label="address:\n       0000000000008840\nbasic block:\n      0000000000008840: lea rdi,[4f028h]\n      0000000000008847: lea rax,[4f028h]\n      000000000000884e: cmp rax,rdi\n      0000000000008851: je short 8868h\ntarget(s):\n      0000000000008853\n      0000000000008868\n"];
-    N0x8853[label="address:\n       0000000000008853\nbasic block:\n      0000000000008853: mov rax,[4e9f8h]\n      000000000000885a: test rax,rax\n      000000000000885d: je short 8868h\ntarget(s):\n      000000000000885f\n      0000000000008868\n"];
-    N0x885f[label="address:\n       000000000000885f\nbasic block:\n      000000000000885f: jmp rax\ntarget(s):\n"];
-    N0x8868[label="address:\n       0000000000008868\nbasic block:\n      0000000000008868: ret\ntarget(s):\n"];
-    N0x8840 -> N0x8853[label=""];
-    N0x8840 -> N0x8868[label=""];
-    N0x8853 -> N0x885f[label=""];
-    N0x8853 -> N0x8868[label=""];
+    N0x970b[label="address:\n       000000000000970b\nbasic block:\n      000000000000970b: mov r14,rax\n      000000000000970e: xchg ax,ax\ntarget(s):\n      0000000000009710\n"];
+    N0x9710[label="address:\n       0000000000009710\nbasic block:\n      0000000000009710: dec r12\n      0000000000009713: je short 9729h\ntarget(s):\n      0000000000009715\n      0000000000009729\n"];
+    N0x9715[label="address:\n       0000000000009715\nbasic block:\n      0000000000009715: lea r13,[r15+230h]\n      000000000000971c: mov rdi,r15\n      000000000000971f: call 9470h\n      0000000000009724: mov r15,r13\n      0000000000009727: jmp short 9710h\ntarget(s):\n      0000000000009729\n      0000000000009710\n"];
+    N0x9729[label="address:\n       0000000000009729\nbasic block:\n      0000000000009729: mov rdi,[rbx]\n      000000000000972c: mov rsi,[rbx+8]\n      0000000000009730: call 9750h\n      0000000000009735: mov rdi,r14\n      0000000000009738: call 6040h\n      000000000000973d: ud2\ntarget(s):\n"];
+    N0x970b -> N0x9710[label=""];
+    N0x9710 -> N0x9715[label=""];
+    N0x9710 -> N0x9729[label=""];
+    N0x9715 -> N0x9729[label=""];
+    N0x9715 -> N0x9710[label=""];
 }
