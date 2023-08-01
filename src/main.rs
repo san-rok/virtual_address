@@ -621,7 +621,26 @@ impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a ControlFlowGraph {
     fn node_identifiers(self) -> Self::NodeIdentifiers {
         self.blocks().iter().map(|x| x.address())
     }
+}
 
+
+impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
+
+    fn node_bound(self: &Self) -> usize {
+        self.blocks().len()
+    }
+
+    fn to_index(self: &Self, a: Self::NodeId) -> usize {
+        self
+            .blocks()
+            .binary_search_by(|block| block.address().cmp(&a))
+            .unwrap()
+    }
+
+    fn from_index(self: &Self, i:usize) -> Self::NodeId {
+        assert!(i < self.blocks().len(),"the requested index {} is out-of-bounds", i);
+        self.blocks()[i].address()
+    }
 
 }
 
@@ -645,6 +664,8 @@ fn main() {
 
     
     let scc = tarjan_scc(&cfg);
+
+    println!("{:#x?}", scc);
 
 
 

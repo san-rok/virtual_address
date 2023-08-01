@@ -1,7 +1,10 @@
 digraph control_flow {
-    N0x8b29[label="address:\n       0000000000008b29\nbasic block:\n      0000000000008b29: mov [rsp+44h],edx\n      0000000000008b2d: lea rdi,[rsp+40h]\n      0000000000008b32: call 8d40h\n      0000000000008b37: mov [rsp+4ch],edx\n      0000000000008b3b: mov [rsp+48h],eax\n      0000000000008b3f: mov eax,[rsp+48h]\n      0000000000008b43: cmp rax,0\n      0000000000008b47: jne short 8b51h\ntarget(s):\n      0000000000008b49\n      0000000000008b51\n"];
-    N0x8b49[label="address:\n       0000000000008b49\nbasic block:\n      0000000000008b49: add rsp,98h\n      0000000000008b50: ret\ntarget(s):\n"];
-    N0x8b51[label="address:\n       0000000000008b51\nbasic block:\n      0000000000008b51: mov eax,[rsp+4ch]\n      0000000000008b55: mov [rsp+54h],eax\n      0000000000008b59: lea rdi,[rsp+54h]\n      0000000000008b5e: call 8c70h\n      0000000000008b63: mov [rsp+88h],rax\n      0000000000008b6b: mov [rsp+90h],rdx\n      0000000000008b73: lea rdi,[rsp+58h]\n      0000000000008b78: lea rsi,[4c308h]\n      0000000000008b7f: mov edx,2\n      0000000000008b84: lea rcx,[rsp+88h]\n      0000000000008b8c: mov r8d,1\n      0000000000008b92: call 8930h\n      0000000000008b97: lea rdi,[rsp+58h]\n      0000000000008b9c: call qword ptr [4eb58h]\ntarget(s):\n"];
-    N0x8b29 -> N0x8b49[label=""];
-    N0x8b29 -> N0x8b51[label=""];
+    N0x8840[label="address:\n       0000000000008840\nbasic block:\n      0000000000008840: lea rdi,[4f028h]\n      0000000000008847: lea rax,[4f028h]\n      000000000000884e: cmp rax,rdi\n      0000000000008851: je short 8868h\ntarget(s):\n      0000000000008853\n      0000000000008868\n"];
+    N0x8853[label="address:\n       0000000000008853\nbasic block:\n      0000000000008853: mov rax,[4e9f8h]\n      000000000000885a: test rax,rax\n      000000000000885d: je short 8868h\ntarget(s):\n      000000000000885f\n      0000000000008868\n"];
+    N0x885f[label="address:\n       000000000000885f\nbasic block:\n      000000000000885f: jmp rax\ntarget(s):\n"];
+    N0x8868[label="address:\n       0000000000008868\nbasic block:\n      0000000000008868: ret\ntarget(s):\n"];
+    N0x8840 -> N0x8853[label=""];
+    N0x8840 -> N0x8868[label=""];
+    N0x8853 -> N0x885f[label=""];
+    N0x8853 -> N0x8868[label=""];
 }
