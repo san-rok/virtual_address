@@ -650,7 +650,7 @@ impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
 */
 
 // in the ordering of the block only the number of instructions matter
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct NoInstrBasicBlock {
     address: u64,
     len: usize,
@@ -678,6 +678,39 @@ impl NoInstrBasicBlock {
             len: bb.instructions().len(), 
             targets: bb.targets().to_vec(),
         }
+
+    }
+
+    // from a node of length n -> a (directed) path of length n
+    // the inside addresses are dummy (i.e. not valid instruction addresses)
+    fn to_path(&self) -> Vec<NoInstrBasicBlock> {
+
+        let mut path: Vec<NoInstrBasicBlock> = Vec::new();
+
+        if self.len() > 1 {
+            for i in (0..self.len()-1) {
+                path.push(
+                    NoInstrBasicBlock { 
+                        address: self.address() + (i as u64), 
+                        len: 1, 
+                        targets: vec![self.address + (i+1) as u64],
+                    }
+                )
+            }
+
+            path.push(
+                NoInstrBasicBlock { 
+                    address: self.address() + ((self.len()-1) as u64), 
+                    len: 1, 
+                    targets: self.targets().to_vec(),
+                }
+            )
+
+        } else {
+            path.push(self.clone());
+        }
+
+        path
 
     }
 
@@ -770,7 +803,47 @@ impl VirtualAddressGraph {
             address: self.address(),
             nodes: nodes,
         }
+
     }
+
+    // returns the list of indegrees of an instance
+    fn in_degrees(&self) -> BTreeMap<u64, usize> {
+
+        // with_capacity(...) ?
+        let mut indeg: BTreeMap<u64, usize> = BTreeMap::new();
+        
+        for node in self.nodes() {
+
+            indeg.entry(node.address()).or_insert(0);
+
+            for target in node.targets() {
+                indeg.entry(*target).and_modify(|counter| *counter += 1).or_insert(1);
+
+            }
+
+        }
+        
+        indeg
+    }
+
+    fn nodes_to_path(&self) -> Self {
+
+        let mut paths_nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+        for node in self.nodes() {
+            let mut path: Vec<NoInstrBasicBlock> = node.to_path();
+            paths_nodes.append(&mut path);
+        }
+
+        paths_nodes.sort();
+
+        VirtualAddressGraph { 
+            address: self.address(), 
+            nodes: paths_nodes,
+        }
+
+    }
+
 
 }
 
@@ -846,12 +919,20 @@ fn main() {
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
     println!("{:#x?}", vag);
     
-    let scc = tarjan_scc(&vag);
-    println!("{:#x?}", scc);
+    // let scc = tarjan_scc(&vag);
+    // println!("{:#x?}", scc);
 
 
     let condensed = vag.condense();
     println!("{:#x?}", condensed);
+
+    let path_condensed = condensed.nodes_to_path();
+    println!("{:#x?}", path_condensed);
+
+    // println!("{:#x?}", condensed.nodes()[2].to_path());
+
+
+    println!("{:#x?}", path_condensed.in_degrees());
 
 }
 
