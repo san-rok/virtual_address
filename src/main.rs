@@ -57,7 +57,7 @@ use iced_x86::*;
 
 use std::collections::BTreeMap;
 // use std::collections::HashSet;
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
 use std::cmp::*;
 
@@ -473,14 +473,17 @@ impl ControlFlowGraph {
     }
 
     // new
+    /*
     fn new(va: u64) -> Self {
         Self {
             address: va,
             blocks: Vec::new(),
         }
     }
+    */
 
     // push in a new block - for a control flow graph it is not necessary
+    /*
     fn push(&mut self, block: BasicBlock) -> () {
 
         match self.blocks().binary_search(&block) {
@@ -491,6 +494,7 @@ impl ControlFlowGraph {
         // self.blocks.push(block);
         // self.blocks.sort();
     }
+    */
 
 }
 
@@ -688,7 +692,7 @@ impl NoInstrBasicBlock {
         let mut path: Vec<NoInstrBasicBlock> = Vec::new();
 
         if self.len() > 1 {
-            for i in (0..self.len()-1) {
+            for i in 0..self.len()-1 {
                 path.push(
                     NoInstrBasicBlock { 
                         address: self.address() + (i as u64), 
@@ -828,6 +832,7 @@ impl VirtualAddressGraph {
         indeg
     }
 
+    // node with .len = n to path of length n
     fn nodes_to_path(&self) -> Self {
 
         let mut paths_nodes: Vec<NoInstrBasicBlock> = Vec::new();
@@ -900,6 +905,21 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
 }
 
+// NOTE: there is a topologiccal sort in petgraph - but it is DFS based
+
+/*
+impl petgraph::visit::Visitable for VirtualAddressGraph {
+    type Map = HashSet<Self::NodeId>;
+
+    fn visit_map(&self) -> Self::Map {
+        HashSet::with_capacity(self.nodes().len())
+    }
+
+    fn reset_map(&self, map: &mut Self::Map) {
+        map.clear()
+    }
+}
+*/
 
 
 fn main() {
@@ -933,8 +953,65 @@ fn main() {
 
     // println!("{:#x?}", condensed.nodes()[2].to_path());
 
+    // println!("{:#x?}", path_condensed.in_degrees());
 
-    println!("{:#x?}", path_condensed.in_degrees());
+    // Kahn's algorithm
+    // TODO:
+    //      pop 0 indegree vertices from id_dict
+    //      path -> node
+
+    // initialize
+    let mut id_dict: BTreeMap<u64,usize> = path_condensed.in_degrees();
+    // fixed in degree dictionary: need to add the highest in degree vertices first!
+    let fix_id_dict = id_dict.clone();
+
+    let mut topsort: Vec<u64> = Vec::new();
+
+    let mut visit: Vec<u64> = Vec::new();
+
+    for (node, indeg) in &id_dict {
+        if *indeg == 0 {
+            visit.push(*node);
+        }
+    }
+
+    while let Some(node) = visit.pop() {
+        let pos = path_condensed
+            .nodes()
+            .binary_search_by(|a| a.address().cmp(&node))
+            .unwrap();
+        println!("position of node: {}", pos);
+
+        for target in path_condensed.nodes()[pos].targets() {
+            id_dict.entry(*target).and_modify(|x| *x -= 1);
+            if id_dict.get(target).unwrap() == &0 {
+                visit.push(*target);
+            }
+        }
+        println!("id_dict: {:#x?}", id_dict);
+
+        topsort.push(node);
+        println!("topological sort: {:#x?}", topsort);
+
+        // always have the highest in degree 
+        // TODO: make this sort more clever!!
+        visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
+    }
+
+    /*
+    let mut sorted_nodes: Vec<u64> = Vec::new();
+    for i in path_condensed.nodes() {
+        sorted_nodes.push(i.address());
+    }
+    sorted_nodes.sort_by(|a,b| id_dict.get(a).unwrap().cmp(id_dict.get(b).unwrap()));
+    */
+
+    // println!("{:#x?}", id_dict);
+    // println!("{:#x?}", sorted_nodes);
+
+
+    // let mut top_sort: Vec<u64> = Vec::new();
+
 
 }
 
