@@ -718,6 +718,17 @@ impl NoInstrBasicBlock {
 
     }
 
+    // TODO: make it more sophisticated!
+    fn from_path(path: Vec<NoInstrBasicBlock>) -> Self {
+
+        NoInstrBasicBlock { 
+            address: path[0].address(), 
+            len: path.len(), 
+            targets: path[path.len()].targets().to_vec()
+        }
+
+    }
+
 }
 
 #[derive(Debug)]
@@ -927,8 +938,8 @@ fn main() {
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
-    let virtual_address: u64 =  0x970b;
-    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840
+    let virtual_address: u64 =  0x8f41;
+    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840, 0x8f41, 0x970b
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
@@ -939,17 +950,17 @@ fn main() {
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
-    println!("{:#x?}", vag);
+    // println!("{:#x?}", vag);
     
     // let scc = tarjan_scc(&vag);
     // println!("{:#x?}", scc);
 
 
     let condensed = vag.condense();
-    println!("{:#x?}", condensed);
+    // println!("{:#x?}", condensed);
 
     let path_condensed = condensed.nodes_to_path();
-    println!("{:#x?}", path_condensed);
+    // println!("{:#x?}", path_condensed);
 
     // println!("{:#x?}", condensed.nodes()[2].to_path());
 
@@ -980,7 +991,7 @@ fn main() {
             .nodes()
             .binary_search_by(|a| a.address().cmp(&node))
             .unwrap();
-        println!("position of node: {}", pos);
+        // println!("position of node: {}", pos);
 
         for target in path_condensed.nodes()[pos].targets() {
             id_dict.entry(*target).and_modify(|x| *x -= 1);
@@ -988,15 +999,47 @@ fn main() {
                 visit.push(*target);
             }
         }
-        println!("id_dict: {:#x?}", id_dict);
+        // println!("id_dict: {:#x?}", id_dict);
 
         topsort.push(node);
-        println!("topological sort: {:#x?}", topsort);
+        // println!("topological sort: {:#x?}", topsort);
 
         // always have the highest in degree 
         // TODO: make this sort more clever!!
+        // TODO: make it correct - what if such an ordering messes up a path ?
+        // it really messes up the inside order in this way - how to correct ?
         visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
+        // println!("{:#x?}", visit);
+        // TBC !!
+
+
+        // dummy path -> node
+
     }
+
+
+    // println!("{:#x?}", topsort);
+
+    // println!("{:x}", 36785);
+    // println!("{:x}", 36841);
+
+    for node in condensed.nodes() {
+        let pos = topsort.iter().position(|n| *n==node.address()).unwrap();
+        let mut i = 0;
+        for address in &topsort[pos..pos + node.len()] {
+            if i == 0 {
+                println!{"start: {:x} with length {}", node.address(), node.len()};
+            }
+            assert_eq!(*address, node.address()+i);
+            println!("topsort: {:x}, condensed: {:x}", address, node.address()+i);
+            i += 1;
+        }
+    }
+
+    
+
+
+
 
     /*
     let mut sorted_nodes: Vec<u64> = Vec::new();
