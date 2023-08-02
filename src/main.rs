@@ -754,7 +754,7 @@ impl VirtualAddressGraph {
 
         // the node label for a sc component = first node's label in tarjan's output
         // the dictionary is stored in a HashMap -> effectiveness ?
-        let mut comp_dict: HashMap<u64, u64> = HashMap::new();
+        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
         for comp in &scc {
             let value = comp[0];
             for node in comp {
@@ -782,6 +782,7 @@ impl VirtualAddressGraph {
 
                 for target in node.targets() {
                     if !(comp.contains(target) || targets.contains(target)) {
+                        // is this .get() fast for BTreeMap ??
                         targets.push( *(comp_dict.get(target).unwrap()) );
                     }
                 }   
@@ -807,6 +808,7 @@ impl VirtualAddressGraph {
     }
 
     // returns the list of indegrees of an instance
+    // sorted by keys!
     fn in_degrees(&self) -> BTreeMap<u64, usize> {
 
         // with_capacity(...) ?
