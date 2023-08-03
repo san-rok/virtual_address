@@ -983,7 +983,7 @@ impl<'a> KahnBasicBlock<'a> {
     }
 
     fn recude_by_one(&mut self) {
-        self.deleted -= 1;
+        self.deleted += 1;
     }
 }
 
