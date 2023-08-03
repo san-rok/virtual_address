@@ -58,6 +58,7 @@ use iced_x86::*;
 use std::collections::BTreeMap;
 // use std::collections::HashSet;
 // use std::collections::HashMap;
+use std::collections::BinaryHeap;
 
 use std::cmp::*;
 
@@ -846,7 +847,7 @@ impl VirtualAddressGraph {
         indeg
     }
 
-
+    /*
     fn lengths(&self) -> BTreeMap<u64, usize> {
 
         let mut lengths: BTreeMap<u64, usize> = BTreeMap::new();
@@ -858,6 +859,7 @@ impl VirtualAddressGraph {
         lengths
 
     }
+    */
 
     // node with .len = n to path of length n
     /*
@@ -949,6 +951,152 @@ impl petgraph::visit::Visitable for VirtualAddressGraph {
 }
 */
 
+#[derive(Debug, Eq, PartialOrd)]
+struct KahnBasicBlock<'a> {
+    block: &'a NoInstrBasicBlock,
+    // initial in-degree of a block
+    indegree: usize,
+    // how many of the incoming edges are deleted so far
+    deleted: usize,
+}
+
+impl<'a> KahnBasicBlock<'a> {
+
+    fn address(&self) -> u64 {
+        self.block.address()
+    }
+
+    fn len(&self) -> usize {
+        self.block.len()
+    }
+
+    fn targets(&self) -> &'a [u64] {
+        self.block.targets()
+    }
+
+    fn indegree(&self) -> usize {
+        self.indegree
+    }
+
+    fn deleted(&self) -> usize {
+        self.deleted
+    }
+
+    fn recude_by_one(&mut self) {
+        self.deleted -= 1;
+    }
+}
+
+// order of kahn's bbs: in-degree, then length
+impl<'a> Ord for KahnBasicBlock<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.indegree().cmp(&other.indegree())
+            .then(self.len().cmp(&other.len()))
+    }
+}
+
+impl<'a> PartialEq for KahnBasicBlock<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.address() == other.address()
+    }
+}
+
+
+
+#[derive(Debug)]
+struct KahnGraph<'a> {
+    address: u64,
+    nodes: Vec<KahnBasicBlock<'a>>,
+}
+
+impl<'a> KahnGraph<'a> {
+
+    fn from_vag(vag: &'a VirtualAddressGraph) -> Self {
+
+        let mut nodes: Vec<KahnBasicBlock> = Vec::new();
+        let indegress: BTreeMap<u64, usize> = vag.in_degrees();
+
+        for node in vag.nodes() {
+
+            nodes.push( KahnBasicBlock{
+                    block: node,
+                    indegree: *indegress.get(&(node.address())).unwrap(),
+                    deleted: 0,
+                }
+            )
+        }
+
+        nodes.sort_by_key(|x| x.address());
+
+        KahnGraph { 
+            address: vag.address(), 
+            nodes: nodes,
+        }
+
+    }
+
+
+    fn address(&self) -> u64 {
+        self.address
+    }
+
+    fn nodes(&self) -> &[KahnBasicBlock] {
+        &self.nodes
+    }
+
+
+    fn nodes_mut(&'a mut self) -> &'a mut [KahnBasicBlock] {
+        &mut self.nodes
+    }
+
+    fn position(&self, target: u64) -> usize {
+        self
+            .nodes()
+            .binary_search_by(|a| a.address().cmp(&target))
+            .unwrap()
+    }
+
+    fn mut_node_at_target(&'a mut self, target: u64) -> &'a mut KahnBasicBlock {
+        let pos = self.position(target);
+        &mut self.nodes_mut()[pos]
+    }
+
+    fn reduce_indegree(&'a mut self, target: u64) -> Option<&KahnBasicBlock> {
+        let pos = self.position(target);
+        let kbb = &mut self.nodes_mut()[pos];
+        
+        kbb.recude_by_one();
+
+        match kbb.indegree() == kbb.deleted() {
+            true => Some(kbb),
+            false => None,
+        }
+    }
+
+    /*
+    fn reduce_indegree(&'a mut self, target: u64) -> Option<KahnBasicBlock> {
+        let pos = self
+            .nodes()
+            .binary_search_by(|a| a.address().cmp(&target))
+            .unwrap();
+
+        self.nodes_mut()[pos].recude_by_one();
+
+        
+        let kbb: KahnBasicBlock = self.nodes()[pos];
+
+        match kbb.indegree() == kbb.deleted() {
+            true => Some(kbb),
+            false => None,
+        }
+        
+    }
+    */
+
+
+
+}
+
 
 fn main() {
 
@@ -976,24 +1124,65 @@ fn main() {
     let condensed = vag.condense();
     // println!("{:#x?}", condensed);
 
-    // let path_condensed = condensed.nodes_to_path();
-    // println!("{:#x?}", path_condensed);
-
-    // println!("{:#x?}", condensed.nodes()[2].to_path());
-
-    // println!("{:#x?}", path_condensed.in_degrees());
-
     // Kahn's algorithm
-    // TODO:
-    //      pop 0 indegree vertices from id_dict
-    //      path -> node
-
     // initialize
-    let mut id: BTreeMap<u64,usize> = condensed.in_degrees();
+    // let mut id: BTreeMap<u64,usize> = condensed.in_degrees();
     
     // references for weights
-    let lengths: BTreeMap<u64, usize> = condensed.lengths();
-    let dict: BTreeMap<u64, usize> = id.clone();
+    // let lengths: BTreeMap<u64, usize> = condensed.lengths();
+    // let dict: BTreeMap<u64, usize> = id.clone();
+
+
+    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+    println!("{:#x?}", kahngraph);
+
+    // kahngraph.reduce_indegree(0x8fb1);
+
+    let mut topsort: Vec<u64> = Vec::new();
+    let mut visit: BinaryHeap<&KahnBasicBlock> = BinaryHeap::new();
+
+
+    for node in kahngraph.nodes() {
+        if node.indegree() == 0 {
+            visit.push(node);
+        }
+    }
+
+    while let Some(node) = visit.pop() {
+        for target in node.targets() {
+
+            if let Some(kahnblock) = kahngraph.reduce_indegree(*target) {
+                visit.push(kahnblock);
+            }
+
+
+             // let mut kbb = kahngraph.mut_node_at_target(*target);
+            /*
+            let pos = kahngraph
+                .nodes()
+                .binary_search_by(|a| a.address().cmp(&target))
+                .unwrap();
+
+            let mut block = &mut kahngraph.nodes_mut()[pos];
+            block.recude_by_one();
+
+            //let pos = kahngraph.position(*target);
+            // kahngraph.nodes_mut()[pos].recude_by_one();
+            // kahngraph.nodes_mut()[pos].deleted += 1;
+
+        
+            // kahngraph.reduce_indegree(*target);
+            
+            */
+
+
+        }
+
+        topsort.push(node.address());
+    }
+
+
+    /*
         
     let mut topsort: Vec<u64> = Vec::new();
     let mut visit: Vec<u64> = Vec::new();
@@ -1010,7 +1199,9 @@ fn main() {
     // visit.sort_by(|a,b| (id_dict.get(a).unwrap() + lengths.get(a).unwrap())
     //    .cmp(id_dict.get(b).unwrap() + lengths.get(b).unwrap()));
 
+    visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
     
+    /*
     visit.sort_by(|a, b|         
         if dict.get(a).unwrap() == dict.get(b).unwrap() {
             lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
@@ -1018,6 +1209,7 @@ fn main() {
             dict.get(a).unwrap().cmp(dict.get(b).unwrap())
         }
     );
+    */
     // visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
 
 
@@ -1040,14 +1232,14 @@ fn main() {
         topsort.push(node);
         // println!("topological sort: {:#x?}", topsort);
 
-        // always have the highest in degree 
-        // TODO: make this sort more clever!!
-        // TODO: make it correct - what if such an ordering messes up a path ?
-        // it really messes up the inside order in this way - how to correct ?
         println!("pre sort visit: {:x?}", visit);
 
-        // visit.sort_by(|a,b| dict.get(a).unwrap().cmp(dict.get(b).unwrap()));
+        visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
 
+
+        // visit.sort_by(|a,b| dict.get(a).unwrap().cmp(dict.get(b).unwrap()));
+        
+        /*
         visit.sort_by(|a, b|         
             if dict.get(a).unwrap() == dict.get(b).unwrap() {
                 lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
@@ -1055,6 +1247,7 @@ fn main() {
                 dict.get(a).unwrap().cmp(dict.get(b).unwrap())
             }
         );
+        */
         
         println!("post sort visit: {:x?}", visit);
         // TBC !!
@@ -1086,23 +1279,7 @@ fn main() {
     */
     
 
-
-
-
-    /*
-    let mut sorted_nodes: Vec<u64> = Vec::new();
-    for i in path_condensed.nodes() {
-        sorted_nodes.push(i.address());
-    }
-    sorted_nodes.sort_by(|a,b| id_dict.get(a).unwrap().cmp(id_dict.get(b).unwrap()));
     */
-
-    // println!("{:#x?}", id_dict);
-    // println!("{:#x?}", sorted_nodes);
-
-
-    // let mut top_sort: Vec<u64> = Vec::new();
-
 
 }
 
