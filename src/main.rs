@@ -687,6 +687,7 @@ impl NoInstrBasicBlock {
 
     // from a node of length n -> a (directed) path of length n
     // the inside addresses are dummy (i.e. not valid instruction addresses)
+    /*
     fn to_path(&self) -> Vec<NoInstrBasicBlock> {
 
         let mut path: Vec<NoInstrBasicBlock> = Vec::new();
@@ -715,10 +716,11 @@ impl NoInstrBasicBlock {
         }
 
         path
-
     }
+    */
 
     // TODO: make it more sophisticated!
+    /*
     fn from_path(path: Vec<NoInstrBasicBlock>) -> Self {
 
         NoInstrBasicBlock { 
@@ -728,6 +730,7 @@ impl NoInstrBasicBlock {
         }
 
     }
+    */
 
 }
 
@@ -843,7 +846,21 @@ impl VirtualAddressGraph {
         indeg
     }
 
+
+    fn lengths(&self) -> BTreeMap<u64, usize> {
+
+        let mut lengths: BTreeMap<u64, usize> = BTreeMap::new();
+
+        for node in self.nodes() {
+            lengths.insert(node.address(), node.len());
+        }
+
+        lengths
+
+    }
+
     // node with .len = n to path of length n
+    /*
     fn nodes_to_path(&self) -> Self {
 
         let mut paths_nodes: Vec<NoInstrBasicBlock> = Vec::new();
@@ -859,8 +876,8 @@ impl VirtualAddressGraph {
             address: self.address(), 
             nodes: paths_nodes,
         }
-
     }
+    */
 
 
 }
@@ -959,7 +976,7 @@ fn main() {
     let condensed = vag.condense();
     // println!("{:#x?}", condensed);
 
-    let path_condensed = condensed.nodes_to_path();
+    // let path_condensed = condensed.nodes_to_path();
     // println!("{:#x?}", path_condensed);
 
     // println!("{:#x?}", condensed.nodes()[2].to_path());
@@ -972,30 +989,49 @@ fn main() {
     //      path -> node
 
     // initialize
-    let mut id_dict: BTreeMap<u64,usize> = path_condensed.in_degrees();
-    // fixed in degree dictionary: need to add the highest in degree vertices first!
-    let fix_id_dict = id_dict.clone();
-
+    let mut id: BTreeMap<u64,usize> = condensed.in_degrees();
+    
+    // references for weights
+    let lengths: BTreeMap<u64, usize> = condensed.lengths();
+    let dict: BTreeMap<u64, usize> = id.clone();
+        
     let mut topsort: Vec<u64> = Vec::new();
-
     let mut visit: Vec<u64> = Vec::new();
 
-    for (node, indeg) in &id_dict {
+    for (node, indeg) in &id {
         if *indeg == 0 {
             visit.push(*node);
+            // id.remove(&node);
         }
     }
 
+    // visit.sort_by(|a,b| dict.get(a).unwrap().cmp( dict.get(b).unwrap() ));
+
+    // visit.sort_by(|a,b| (id_dict.get(a).unwrap() + lengths.get(a).unwrap())
+    //    .cmp(id_dict.get(b).unwrap() + lengths.get(b).unwrap()));
+
+    
+    visit.sort_by(|a, b|         
+        if dict.get(a).unwrap() == dict.get(b).unwrap() {
+            lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
+        } else {
+            dict.get(a).unwrap().cmp(dict.get(b).unwrap())
+        }
+    );
+    // visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
+
+
+    // println!("{:#x?}", visit);
+
     while let Some(node) = visit.pop() {
-        let pos = path_condensed
+        let pos = condensed
             .nodes()
             .binary_search_by(|a| a.address().cmp(&node))
             .unwrap();
-        // println!("position of node: {}", pos);
 
-        for target in path_condensed.nodes()[pos].targets() {
-            id_dict.entry(*target).and_modify(|x| *x -= 1);
-            if id_dict.get(target).unwrap() == &0 {
+        for target in condensed.nodes()[pos].targets() {
+            id.entry(*target).and_modify(|x| *x -= 1);
+            if id.get(target).unwrap() == &0 {
                 visit.push(*target);
             }
         }
@@ -1008,8 +1044,19 @@ fn main() {
         // TODO: make this sort more clever!!
         // TODO: make it correct - what if such an ordering messes up a path ?
         // it really messes up the inside order in this way - how to correct ?
-        visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
-        // println!("{:#x?}", visit);
+        println!("pre sort visit: {:x?}", visit);
+
+        // visit.sort_by(|a,b| dict.get(a).unwrap().cmp(dict.get(b).unwrap()));
+
+        visit.sort_by(|a, b|         
+            if dict.get(a).unwrap() == dict.get(b).unwrap() {
+                lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
+            } else {
+                dict.get(a).unwrap().cmp(dict.get(b).unwrap())
+            }
+        );
+        
+        println!("post sort visit: {:x?}", visit);
         // TBC !!
 
 
@@ -1018,11 +1065,12 @@ fn main() {
     }
 
 
-    // println!("{:#x?}", topsort);
+    println!("topological sort: {:#x?}", topsort);
 
     // println!("{:x}", 36785);
     // println!("{:x}", 36841);
 
+    /*
     for node in condensed.nodes() {
         let pos = topsort.iter().position(|n| *n==node.address()).unwrap();
         let mut i = 0;
@@ -1035,7 +1083,7 @@ fn main() {
             i += 1;
         }
     }
-
+    */
     
 
 
