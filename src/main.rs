@@ -473,30 +473,6 @@ impl ControlFlowGraph {
         dot2::render(self, output)
     }
 
-    // new
-    /*
-    fn new(va: u64) -> Self {
-        Self {
-            address: va,
-            blocks: Vec::new(),
-        }
-    }
-    */
-
-    // push in a new block - for a control flow graph it is not necessary
-    /*
-    fn push(&mut self, block: BasicBlock) -> () {
-
-        match self.blocks().binary_search(&block) {
-            Ok(_) => {}
-            Err(pos) => self.blocks.insert(pos, block),
-        }
-
-        // self.blocks.push(block);
-        // self.blocks.sort();
-    }
-    */
-
 }
 
 
@@ -566,96 +542,10 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
 }
 
-// petgraph traits implemented for ControlFlowGraph
 
-/*
-impl petgraph::visit::GraphBase for ControlFlowGraph {
-    type NodeId = u64;
-    type EdgeId = (u64, u64);
-}
-
-
-impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
-    // type Neighbors = core::slice::Iter<'a, Self::NodeId>
-    // here Iterator<Item = Self::NodeId> expects: u64, but obtains: &u64
-    // how to solve?
-    // type Neighbors = std::vec::IntoIter<Self::NodeId>;
-    // type Neighbors = std::iter::Copied<std::slice::Iter<'a, u64>>;
-
-    type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
-
-    
-    // TODO: binary search !!
-    // e.g.: order the blocks when CFG is generated!
-    // or use BTM or HashMap
-    fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
-        // let targets = 
-        // (*self)
-        //    .blocks().iter()
-        //    .find(|x| x.address() == a)
-        //    .map(|x| x.targets()).unwrap().iter().copied()
-        // targets
-
-        let pos = 
-            self
-                .blocks()
-                .binary_search_by(|block| block.address().cmp(&a))
-                .unwrap();
-        self.blocks()[pos].targets().iter().copied()
-
-        // let pos = (*self).blocks().binary_search(a)
-    }
-}
-
-
-impl petgraph::visit::Visitable for ControlFlowGraph {
-    type Map = HashSet<Self::NodeId>;
-
-    fn visit_map(&self) -> Self::Map {
-        HashSet::with_capacity(self.blocks().len())
-    }
-
-    fn reset_map(&self, map: &mut Self::Map) {
-        map.clear()
-    }
-}
-
-
-impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a ControlFlowGraph {
-    // without impl trait associated type ?
-    // std::iter::Map<,...> - what is the second argument here?    
-    type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
-
-    fn node_identifiers(self) -> Self::NodeIdentifiers {
-        self.blocks().iter().map(|x| x.address())
-    }
-}
-
-
-impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
-
-    fn node_bound(self: &Self) -> usize {
-        self.blocks().len()
-    }
-
-    fn to_index(self: &Self, a: Self::NodeId) -> usize {
-        self
-            .blocks()
-            .binary_search_by(|block| block.address().cmp(&a))
-            .unwrap()
-    }
-
-    fn from_index(self: &Self, i:usize) -> Self::NodeId {
-        assert!(i < self.blocks().len(),"the requested index {} is out-of-bounds", i);
-        self.blocks()[i].address()
-    }
-
-}
-
-*/
 
 // in the ordering of the block only the number of instructions matter
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug)]
 struct NoInstrBasicBlock {
     address: u64,
     len: usize,
@@ -699,6 +589,29 @@ impl NoInstrBasicBlock {
 
 }
 
+// equality of NIBB's whenever their addresses are the same
+impl PartialEq for NoInstrBasicBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.address() == other.address()
+    }
+}
+
+impl Eq for NoInstrBasicBlock {}
+
+// order of NIBB's: first by the number of incoming edges then by the length of basic block
+impl PartialOrd for NoInstrBasicBlock {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NoInstrBasicBlock {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.indegree().cmp(&other.indegree())
+            .then(self.len().cmp(&other.len()))
+    }
+}
+
 #[derive(Debug)]
 struct VirtualAddressGraph {
     address: u64,
@@ -736,7 +649,6 @@ impl VirtualAddressGraph {
 
         for node in self.nodes_mut() {
             node.set_indegree( *indeg.get(&node.address()).unwrap() );
-            // node.mut_indegree() =  &mut *indeg.get(&node.address()).unwrap();
         }
     }
 
@@ -843,43 +755,10 @@ impl VirtualAddressGraph {
 
     }
 
-    /*
-    fn lengths(&self) -> BTreeMap<u64, usize> {
-
-        let mut lengths: BTreeMap<u64, usize> = BTreeMap::new();
-
-        for node in self.nodes() {
-            lengths.insert(node.address(), node.len());
-        }
-
-        lengths
-
-    }
-    */
-
-    // node with .len = n to path of length n
-    /*
-    fn nodes_to_path(&self) -> Self {
-
-        let mut paths_nodes: Vec<NoInstrBasicBlock> = Vec::new();
-
-        for node in self.nodes() {
-            let mut path: Vec<NoInstrBasicBlock> = node.to_path();
-            paths_nodes.append(&mut path);
-        }
-
-        paths_nodes.sort();
-
-        VirtualAddressGraph { 
-            address: self.address(), 
-            nodes: paths_nodes,
-        }
-    }
-    */
-
-
 }
 
+// for Tarjan's scc to work we need the following traits to be implemented for VAG
+// NOTE: there is a topologiccal sort in petgraph - but it is DFS based
 
 impl petgraph::visit::GraphBase for VirtualAddressGraph {
     type NodeId = u64;
@@ -931,28 +810,12 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
 }
 
-// NOTE: there is a topologiccal sort in petgraph - but it is DFS based
 
-/*
-impl petgraph::visit::Visitable for VirtualAddressGraph {
-    type Map = HashSet<Self::NodeId>;
-
-    fn visit_map(&self) -> Self::Map {
-        HashSet::with_capacity(self.nodes().len())
-    }
-
-    fn reset_map(&self, map: &mut Self::Map) {
-        map.clear()
-    }
-}
-*/
-
-#[derive(Debug, Eq, PartialOrd)]
+#[derive(Debug)]
 struct KahnBasicBlock<'a> {
     block: &'a NoInstrBasicBlock,
-    // initial in-degree of a block
-    indegree: usize,
     // how many of the incoming edges are deleted so far
+    // this field will be modified during the weighted Kahn's algorithm
     deleted: usize,
 }
 
@@ -960,6 +823,10 @@ impl<'a> KahnBasicBlock<'a> {
 
     fn address(&self) -> u64 {
         self.block.address()
+    }
+
+    fn block(&self) -> &'a NoInstrBasicBlock {
+        self.block
     }
 
     fn len(&self) -> usize {
@@ -971,7 +838,7 @@ impl<'a> KahnBasicBlock<'a> {
     }
 
     fn indegree(&self) -> usize {
-        self.indegree
+        self.block.indegree()
     }
 
     fn deleted(&self) -> usize {
@@ -983,21 +850,6 @@ impl<'a> KahnBasicBlock<'a> {
     }
 }
 
-// order of kahn's bbs: in-degree, then length
-impl<'a> Ord for KahnBasicBlock<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.indegree().cmp(&other.indegree())
-            .then(self.len().cmp(&other.len()))
-    }
-}
-
-impl<'a> PartialEq for KahnBasicBlock<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.address() == other.address()
-    }
-}
-
-
 
 #[derive(Debug)]
 struct KahnGraph<'a> {
@@ -1007,16 +859,14 @@ struct KahnGraph<'a> {
 
 impl<'a> KahnGraph<'a> {
 
+    // generates a KahnGraph instance from a VAG
     fn from_vag(vag: &'a VirtualAddressGraph) -> Self {
 
         let mut nodes: Vec<KahnBasicBlock> = Vec::new();
-        let indegress: BTreeMap<u64, usize> = vag.in_degrees();
 
         for node in vag.nodes() {
-
             nodes.push( KahnBasicBlock{
                     block: node,
-                    indegree: *indegress.get(&(node.address())).unwrap(),
                     deleted: 0,
                 }
             )
@@ -1031,17 +881,18 @@ impl<'a> KahnGraph<'a> {
 
     }
 
-
+    // returns the address of the KahnGraph (i.e. the starting va)
     fn address(&self) -> u64 {
         self.address
     }
 
-    fn nodes(&self) -> &[KahnBasicBlock] {
+    // returns the slice of KBBs of the KahnGraph
+    fn nodes(&self) -> &[KahnBasicBlock<'a>] {
         &self.nodes
     }
 
-
-    fn nodes_mut(&'a mut self) -> &'a mut [KahnBasicBlock] {
+    // returns a mutable slice of KBBs of the KahnGraph
+    fn nodes_mut(&mut self) -> &mut [KahnBasicBlock<'a>] {
         &mut self.nodes
     }
 
@@ -1052,44 +903,26 @@ impl<'a> KahnGraph<'a> {
             .unwrap()
     }
 
-    fn mut_node_at_target(&'a mut self, target: u64) -> &'a mut KahnBasicBlock {
+    fn node_at_target(&self, target: u64) -> &KahnBasicBlock<'a> {
+        let pos = self.position(target);
+        &self.nodes()[pos]
+    }
+
+    fn node_at_target_mut(&mut self, target: u64) -> &mut KahnBasicBlock<'a> {
         let pos = self.position(target);
         &mut self.nodes_mut()[pos]
     }
 
-    fn reduce_indegree(&'a mut self, target: u64) -> Option<&KahnBasicBlock> {
-        let pos = self.position(target);
-        let kbb = &mut self.nodes_mut()[pos];
+    fn reduce_indegree(&mut self, target: u64) -> Option<&'a NoInstrBasicBlock> {
+        let mut kbb = &mut self.node_at_target_mut(target);
         
         kbb.recude_by_one();
 
         match kbb.indegree() == kbb.deleted() {
-            true => Some(kbb),
+            true => Some(kbb.block()),
             false => None,
         }
     }
-
-    /*
-    fn reduce_indegree(&'a mut self, target: u64) -> Option<KahnBasicBlock> {
-        let pos = self
-            .nodes()
-            .binary_search_by(|a| a.address().cmp(&target))
-            .unwrap();
-
-        self.nodes_mut()[pos].recude_by_one();
-
-        
-        let kbb: KahnBasicBlock = self.nodes()[pos];
-
-        match kbb.indegree() == kbb.deleted() {
-            true => Some(kbb),
-            false => None,
-        }
-        
-    }
-    */
-
-
 
 }
 
@@ -1297,6 +1130,94 @@ fn main() {
 
 
 
+
+// petgraph traits implemented for ControlFlowGraph
+
+/*
+impl petgraph::visit::GraphBase for ControlFlowGraph {
+    type NodeId = u64;
+    type EdgeId = (u64, u64);
+}
+
+
+impl<'a> petgraph::visit::IntoNeighbors for &'a ControlFlowGraph {
+    // type Neighbors = core::slice::Iter<'a, Self::NodeId>
+    // here Iterator<Item = Self::NodeId> expects: u64, but obtains: &u64
+    // how to solve?
+    // type Neighbors = std::vec::IntoIter<Self::NodeId>;
+    // type Neighbors = std::iter::Copied<std::slice::Iter<'a, u64>>;
+
+    type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
+
+    
+    // TODO: binary search !!
+    // e.g.: order the blocks when CFG is generated!
+    // or use BTM or HashMap
+    fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
+        // let targets = 
+        // (*self)
+        //    .blocks().iter()
+        //    .find(|x| x.address() == a)
+        //    .map(|x| x.targets()).unwrap().iter().copied()
+        // targets
+
+        let pos = 
+            self
+                .blocks()
+                .binary_search_by(|block| block.address().cmp(&a))
+                .unwrap();
+        self.blocks()[pos].targets().iter().copied()
+
+        // let pos = (*self).blocks().binary_search(a)
+    }
+}
+
+
+impl petgraph::visit::Visitable for ControlFlowGraph {
+    type Map = HashSet<Self::NodeId>;
+
+    fn visit_map(&self) -> Self::Map {
+        HashSet::with_capacity(self.blocks().len())
+    }
+
+    fn reset_map(&self, map: &mut Self::Map) {
+        map.clear()
+    }
+}
+
+
+impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a ControlFlowGraph {
+    // without impl trait associated type ?
+    // std::iter::Map<,...> - what is the second argument here?    
+    type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
+
+    fn node_identifiers(self) -> Self::NodeIdentifiers {
+        self.blocks().iter().map(|x| x.address())
+    }
+}
+
+
+impl<'a> petgraph::visit::NodeIndexable for &'a ControlFlowGraph {
+
+    fn node_bound(self: &Self) -> usize {
+        self.blocks().len()
+    }
+
+    fn to_index(self: &Self, a: Self::NodeId) -> usize {
+        self
+            .blocks()
+            .binary_search_by(|block| block.address().cmp(&a))
+            .unwrap()
+    }
+
+    fn from_index(self: &Self, i:usize) -> Self::NodeId {
+        assert!(i < self.blocks().len(),"the requested index {} is out-of-bounds", i);
+        self.blocks()[i].address()
+    }
+
+}
+
+*/
 
 // DOMINATORS
 
@@ -1516,6 +1437,28 @@ let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
 
 
 */
+
+/*
+    fn reduce_indegree(&'a mut self, target: u64) -> Option<KahnBasicBlock> {
+        let pos = self
+            .nodes()
+            .binary_search_by(|a| a.address().cmp(&target))
+            .unwrap();
+
+        self.nodes_mut()[pos].recude_by_one();
+
+        
+        let kbb: KahnBasicBlock = self.nodes()[pos];
+
+        match kbb.indegree() == kbb.deleted() {
+            true => Some(kbb),
+            false => None,
+        }
+        
+    }
+*/
+
+
 
 
 
