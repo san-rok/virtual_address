@@ -660,7 +660,9 @@ struct NoInstrBasicBlock {
     address: u64,
     len: usize,
     targets: Vec<u64>,
+    indegree: usize,
 }
+// if we consider the block alone, then its indegree is set to be 0
 
 impl NoInstrBasicBlock {
     
@@ -676,62 +678,24 @@ impl NoInstrBasicBlock {
         &self.targets
     }
 
+    fn indegree(&self) -> usize {
+        self.indegree
+    }
+
+    fn set_indegree(&mut self, indegree: usize) {
+        self.indegree = indegree;
+    }
+
     fn from_bb(bb: &BasicBlock) -> Self {
 
         NoInstrBasicBlock { 
             address: bb.address(), 
             len: bb.instructions().len(), 
             targets: bb.targets().to_vec(),
+            indegree: 0 as usize,
         }
 
     }
-
-    // from a node of length n -> a (directed) path of length n
-    // the inside addresses are dummy (i.e. not valid instruction addresses)
-    /*
-    fn to_path(&self) -> Vec<NoInstrBasicBlock> {
-
-        let mut path: Vec<NoInstrBasicBlock> = Vec::new();
-
-        if self.len() > 1 {
-            for i in 0..self.len()-1 {
-                path.push(
-                    NoInstrBasicBlock { 
-                        address: self.address() + (i as u64), 
-                        len: 1, 
-                        targets: vec![self.address + (i+1) as u64],
-                    }
-                )
-            }
-
-            path.push(
-                NoInstrBasicBlock { 
-                    address: self.address() + ((self.len()-1) as u64), 
-                    len: 1, 
-                    targets: self.targets().to_vec(),
-                }
-            )
-
-        } else {
-            path.push(self.clone());
-        }
-
-        path
-    }
-    */
-
-    // TODO: make it more sophisticated!
-    /*
-    fn from_path(path: Vec<NoInstrBasicBlock>) -> Self {
-
-        NoInstrBasicBlock { 
-            address: path[0].address(), 
-            len: path.len(), 
-            targets: path[path.len()].targets().to_vec()
-        }
-
-    }
-    */
 
 }
 
@@ -743,6 +707,39 @@ struct VirtualAddressGraph {
 
 impl VirtualAddressGraph {
 
+    // returns the list of indegrees of an instance
+    // sorted by keys!
+    fn in_degrees(&self) -> BTreeMap<u64, usize> {
+
+        // with_capacity(...) ?
+        let mut indeg: BTreeMap<u64, usize> = BTreeMap::new();
+        
+        for node in self.nodes() {
+
+            indeg.entry(node.address()).or_insert(0);
+
+            for target in node.targets() {
+                indeg.entry(*target).and_modify(|counter| *counter += 1).or_insert(1);
+
+            }
+
+        }
+        
+        indeg
+    }
+
+    // an extra iteration through the nodes of the graph to update the indegrees of the vertices
+    // maybe there is a more clever/effective way to do this - where one can use the iteration in
+    // from_cfg() method to get the indegrees
+    fn update_in_degrees(&mut self) {
+        let indeg = self.in_degrees();
+
+        for node in self.nodes_mut() {
+            node.set_indegree( *indeg.get(&node.address()).unwrap() );
+            // node.mut_indegree() =  &mut *indeg.get(&node.address()).unwrap();
+        }
+    }
+
     fn from_cfg(cfg: &ControlFlowGraph) -> Self {
         let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
 
@@ -751,10 +748,19 @@ impl VirtualAddressGraph {
             nodes.push(node);
         }
 
+        nodes.sort_by_key(|node| node.address());
+
+        let mut vag = 
         VirtualAddressGraph { 
             address: cfg.address(), 
             nodes: nodes,
-        }
+        };
+
+        // TODO: merge this two iterations - more effective algoithm!!
+        vag.update_in_degrees();
+
+        vag
+
     }
 
     fn address(&self) -> u64 {
@@ -764,6 +770,11 @@ impl VirtualAddressGraph {
     fn nodes(&self) -> &[NoInstrBasicBlock] {
         &self.nodes
     }
+
+    fn nodes_mut(&mut self) -> &mut [NoInstrBasicBlock] {
+        &mut self.nodes
+    }
+
 
     // generates the condensed vag - using petgraph::algo::tarjan_scc
     fn condense(&self) -> Self {
@@ -812,39 +823,24 @@ impl VirtualAddressGraph {
                     address: address, 
                     len: length, 
                     targets: targets,
+                    indegree: 0 as usize,
                 }
             );
         }
 
         // for later use: sort by address
-        nodes.sort();
+        nodes.sort_by_key(|node| node.address());
 
+        let mut vag =
         VirtualAddressGraph { 
             address: self.address(),
             nodes: nodes,
-        }
+        };
 
-    }
+        vag.update_in_degrees();
 
-    // returns the list of indegrees of an instance
-    // sorted by keys!
-    fn in_degrees(&self) -> BTreeMap<u64, usize> {
+        vag
 
-        // with_capacity(...) ?
-        let mut indeg: BTreeMap<u64, usize> = BTreeMap::new();
-        
-        for node in self.nodes() {
-
-            indeg.entry(node.address()).or_insert(0);
-
-            for target in node.targets() {
-                indeg.entry(*target).and_modify(|counter| *counter += 1).or_insert(1);
-
-            }
-
-        }
-        
-        indeg
     }
 
     /*
@@ -1122,7 +1118,7 @@ fn main() {
 
 
     let condensed = vag.condense();
-    // println!("{:#x?}", condensed);
+    println!("{:#x?}", condensed);
 
     // Kahn's algorithm
     // initialize
@@ -1132,6 +1128,8 @@ fn main() {
     // let lengths: BTreeMap<u64, usize> = condensed.lengths();
     // let dict: BTreeMap<u64, usize> = id.clone();
 
+
+    /*
 
     let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
     println!("{:#x?}", kahngraph);
@@ -1181,6 +1179,7 @@ fn main() {
         topsort.push(node.address());
     }
 
+     */
 
     /*
         
@@ -1465,6 +1464,61 @@ let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
 
 
 */
+
+/*
+
+// from a node of length n -> a (directed) path of length n
+    // the inside addresses are dummy (i.e. not valid instruction addresses)
+    /*
+    fn to_path(&self) -> Vec<NoInstrBasicBlock> {
+
+        let mut path: Vec<NoInstrBasicBlock> = Vec::new();
+
+        if self.len() > 1 {
+            for i in 0..self.len()-1 {
+                path.push(
+                    NoInstrBasicBlock { 
+                        address: self.address() + (i as u64), 
+                        len: 1, 
+                        targets: vec![self.address + (i+1) as u64],
+                    }
+                )
+            }
+
+            path.push(
+                NoInstrBasicBlock { 
+                    address: self.address() + ((self.len()-1) as u64), 
+                    len: 1, 
+                    targets: self.targets().to_vec(),
+                }
+            )
+
+        } else {
+            path.push(self.clone());
+        }
+
+        path
+    }
+    */
+
+    // TODO: make it more sophisticated!
+    /*
+    fn from_path(path: Vec<NoInstrBasicBlock>) -> Self {
+
+        NoInstrBasicBlock { 
+            address: path[0].address(), 
+            len: path.len(), 
+            targets: path[path.len()].targets().to_vec()
+        }
+
+    }
+    */
+
+
+*/
+
+
+
 
 
 
