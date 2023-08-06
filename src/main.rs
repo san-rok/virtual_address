@@ -829,6 +829,7 @@ impl<'a> KahnBasicBlock<'a> {
         self.block
     }
 
+    /*
     fn len(&self) -> usize {
         self.block.len()
     }
@@ -836,6 +837,7 @@ impl<'a> KahnBasicBlock<'a> {
     fn targets(&self) -> &'a [u64] {
         self.block.targets()
     }
+    */
 
     fn indegree(&self) -> usize {
         self.block.indegree()
@@ -843,6 +845,10 @@ impl<'a> KahnBasicBlock<'a> {
 
     fn deleted(&self) -> usize {
         self.deleted
+    }
+
+    fn set_deleted(&mut self, deleted: usize) {
+        self.deleted = deleted;
     }
 
     fn recude_by_one(&mut self) {
@@ -903,10 +909,12 @@ impl<'a> KahnGraph<'a> {
             .unwrap()
     }
 
+    /*
     fn node_at_target(&self, target: u64) -> &KahnBasicBlock<'a> {
         let pos = self.position(target);
         &self.nodes()[pos]
     }
+    */
 
     fn node_at_target_mut(&mut self, target: u64) -> &mut KahnBasicBlock<'a> {
         let pos = self.position(target);
@@ -914,7 +922,7 @@ impl<'a> KahnGraph<'a> {
     }
 
     fn reduce_indegree(&mut self, target: u64) -> Option<&'a NoInstrBasicBlock> {
-        let mut kbb = &mut self.node_at_target_mut(target);
+        let kbb = self.node_at_target_mut(target);
         
         kbb.recude_by_one();
 
@@ -922,6 +930,52 @@ impl<'a> KahnGraph<'a> {
             true => Some(kbb.block()),
             false => None,
         }
+    }
+
+    fn no_deleted(&mut self) {
+        for node in self.nodes_mut() {
+            node.set_deleted(0);
+        }
+    }
+
+    // an implementation of the weighted version of Kahn's topological sorting algorithm 
+    // for directed acyclic graphs
+    // the weights are used for tie breaking when there are more than one vertex with 
+    // zero indegree: sorted by two keys: original in-degree and then lengths of block
+    fn kahn_algorithm(&mut self) -> Vec<u64> {
+
+        // topsort: the topological order of the basic blocks - collecting only the addresses
+        let mut topsort: Vec<u64> = Vec::new();
+        // an auxiliary vector: the zero in-degree vertices of the running algorithm
+        let mut visit: BinaryHeap<&NoInstrBasicBlock> = BinaryHeap::new();
+
+
+        // initialization: collect the initially zero in-degree vertices
+        // the binary heap orders them by length
+        for node in self.nodes() {
+            if node.indegree() == 0 {
+                visit.push(node.block());
+            }
+        }
+
+        while let Some(node) = visit.pop() {
+            // reduce the in-degrees of the actual vertex's target(s)
+            for target in node.targets() {
+
+                if let Some(block) = self.reduce_indegree(*target) {
+                    visit.push(block);
+                }
+            }
+
+            topsort.push(node.address());
+        }
+
+        // for further use we decrease the deleted fields back to zero for all nodes
+        self.no_deleted();
+
+        // return topological order
+        topsort
+
     }
 
 }
@@ -954,164 +1008,15 @@ fn main() {
     println!("{:#x?}", condensed);
 
     // Kahn's algorithm
-    // initialize
-    // let mut id: BTreeMap<u64,usize> = condensed.in_degrees();
-    
-    // references for weights
-    // let lengths: BTreeMap<u64, usize> = condensed.lengths();
-    // let dict: BTreeMap<u64, usize> = id.clone();
-
-
-    /*
-
     let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+
     println!("{:#x?}", kahngraph);
 
-    // kahngraph.reduce_indegree(0x8fb1);
+    let topsort = kahngraph.kahn_algorithm();
+    println!("starting block's address: {:x}", kahngraph.address());
+    println!("{:#x?}", topsort);
 
-    let mut topsort: Vec<u64> = Vec::new();
-    let mut visit: BinaryHeap<&KahnBasicBlock> = BinaryHeap::new();
-
-
-    for node in kahngraph.nodes() {
-        if node.indegree() == 0 {
-            visit.push(node);
-        }
-    }
-
-    while let Some(node) = visit.pop() {
-        for target in node.targets() {
-
-            if let Some(kahnblock) = kahngraph.reduce_indegree(*target) {
-                visit.push(kahnblock);
-            }
-
-
-             // let mut kbb = kahngraph.mut_node_at_target(*target);
-            /*
-            let pos = kahngraph
-                .nodes()
-                .binary_search_by(|a| a.address().cmp(&target))
-                .unwrap();
-
-            let mut block = &mut kahngraph.nodes_mut()[pos];
-            block.recude_by_one();
-
-            //let pos = kahngraph.position(*target);
-            // kahngraph.nodes_mut()[pos].recude_by_one();
-            // kahngraph.nodes_mut()[pos].deleted += 1;
-
-        
-            // kahngraph.reduce_indegree(*target);
-            
-            */
-
-
-        }
-
-        topsort.push(node.address());
-    }
-
-     */
-
-    /*
-        
-    let mut topsort: Vec<u64> = Vec::new();
-    let mut visit: Vec<u64> = Vec::new();
-
-    for (node, indeg) in &id {
-        if *indeg == 0 {
-            visit.push(*node);
-            // id.remove(&node);
-        }
-    }
-
-    // visit.sort_by(|a,b| dict.get(a).unwrap().cmp( dict.get(b).unwrap() ));
-
-    // visit.sort_by(|a,b| (id_dict.get(a).unwrap() + lengths.get(a).unwrap())
-    //    .cmp(id_dict.get(b).unwrap() + lengths.get(b).unwrap()));
-
-    visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
     
-    /*
-    visit.sort_by(|a, b|         
-        if dict.get(a).unwrap() == dict.get(b).unwrap() {
-            lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
-        } else {
-            dict.get(a).unwrap().cmp(dict.get(b).unwrap())
-        }
-    );
-    */
-    // visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
-
-
-    // println!("{:#x?}", visit);
-
-    while let Some(node) = visit.pop() {
-        let pos = condensed
-            .nodes()
-            .binary_search_by(|a| a.address().cmp(&node))
-            .unwrap();
-
-        for target in condensed.nodes()[pos].targets() {
-            id.entry(*target).and_modify(|x| *x -= 1);
-            if id.get(target).unwrap() == &0 {
-                visit.push(*target);
-            }
-        }
-        // println!("id_dict: {:#x?}", id_dict);
-
-        topsort.push(node);
-        // println!("topological sort: {:#x?}", topsort);
-
-        println!("pre sort visit: {:x?}", visit);
-
-        visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
-
-
-        // visit.sort_by(|a,b| dict.get(a).unwrap().cmp(dict.get(b).unwrap()));
-        
-        /*
-        visit.sort_by(|a, b|         
-            if dict.get(a).unwrap() == dict.get(b).unwrap() {
-                lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
-            } else {
-                dict.get(a).unwrap().cmp(dict.get(b).unwrap())
-            }
-        );
-        */
-        
-        println!("post sort visit: {:x?}", visit);
-        // TBC !!
-
-
-        // dummy path -> node
-
-    }
-
-
-    println!("topological sort: {:#x?}", topsort);
-
-    // println!("{:x}", 36785);
-    // println!("{:x}", 36841);
-
-    /*
-    for node in condensed.nodes() {
-        let pos = topsort.iter().position(|n| *n==node.address()).unwrap();
-        let mut i = 0;
-        for address in &topsort[pos..pos + node.len()] {
-            if i == 0 {
-                println!{"start: {:x} with length {}", node.address(), node.len()};
-            }
-            assert_eq!(*address, node.address()+i);
-            println!("topsort: {:x}, condensed: {:x}", address, node.address()+i);
-            i += 1;
-        }
-    }
-    */
-    
-
-    */
 
 }
 
@@ -1458,7 +1363,152 @@ let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
     }
 */
 
+/*
 
+    let mut topsort: Vec<u64> = Vec::new();
+    let mut visit: BinaryHeap<&NoInstrBasicBlock> = BinaryHeap::new();
+
+
+    for node in kahngraph.nodes() {
+        if node.indegree() == 0 {
+            visit.push(node.block());
+        }
+    }
+
+    while let Some(node) = visit.pop() {
+        for target in node.targets() {
+
+            if let Some(kahnblock) = kahngraph.reduce_indegree(*target) {
+                visit.push(kahnblock);
+            }
+
+
+             // let mut kbb = kahngraph.mut_node_at_target(*target);
+            /*
+            let pos = kahngraph
+                .nodes()
+                .binary_search_by(|a| a.address().cmp(&target))
+                .unwrap();
+
+            let mut block = &mut kahngraph.nodes_mut()[pos];
+            block.recude_by_one();
+
+            //let pos = kahngraph.position(*target);
+            // kahngraph.nodes_mut()[pos].recude_by_one();
+            // kahngraph.nodes_mut()[pos].deleted += 1;
+
+        
+            // kahngraph.reduce_indegree(*target);
+            
+            */
+
+
+        }
+
+        topsort.push(node.address());
+    }
+
+    println!("{:#x?}", topsort);
+*/
+
+/*
+        
+    let mut topsort: Vec<u64> = Vec::new();
+    let mut visit: Vec<u64> = Vec::new();
+
+    for (node, indeg) in &id {
+        if *indeg == 0 {
+            visit.push(*node);
+            // id.remove(&node);
+        }
+    }
+
+    // visit.sort_by(|a,b| dict.get(a).unwrap().cmp( dict.get(b).unwrap() ));
+
+    // visit.sort_by(|a,b| (id_dict.get(a).unwrap() + lengths.get(a).unwrap())
+    //    .cmp(id_dict.get(b).unwrap() + lengths.get(b).unwrap()));
+
+    visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
+    
+    /*
+    visit.sort_by(|a, b|         
+        if dict.get(a).unwrap() == dict.get(b).unwrap() {
+            lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
+        } else {
+            dict.get(a).unwrap().cmp(dict.get(b).unwrap())
+        }
+    );
+    */
+    // visit.sort_by(|a,b| fix_id_dict.get(a).unwrap().cmp(fix_id_dict.get(b).unwrap()));
+
+
+    // println!("{:#x?}", visit);
+
+    while let Some(node) = visit.pop() {
+        let pos = condensed
+            .nodes()
+            .binary_search_by(|a| a.address().cmp(&node))
+            .unwrap();
+
+        for target in condensed.nodes()[pos].targets() {
+            id.entry(*target).and_modify(|x| *x -= 1);
+            if id.get(target).unwrap() == &0 {
+                visit.push(*target);
+            }
+        }
+        // println!("id_dict: {:#x?}", id_dict);
+
+        topsort.push(node);
+        // println!("topological sort: {:#x?}", topsort);
+
+        println!("pre sort visit: {:x?}", visit);
+
+        visit.sort_by_key(|a| (dict.get(a).unwrap(), lengths.get(a).unwrap()));
+
+
+        // visit.sort_by(|a,b| dict.get(a).unwrap().cmp(dict.get(b).unwrap()));
+        
+        /*
+        visit.sort_by(|a, b|         
+            if dict.get(a).unwrap() == dict.get(b).unwrap() {
+                lengths.get(a).unwrap().cmp(lengths.get(b).unwrap())
+            } else {
+                dict.get(a).unwrap().cmp(dict.get(b).unwrap())
+            }
+        );
+        */
+        
+        println!("post sort visit: {:x?}", visit);
+        // TBC !!
+
+
+        // dummy path -> node
+
+    }
+
+
+    println!("topological sort: {:#x?}", topsort);
+
+    // println!("{:x}", 36785);
+    // println!("{:x}", 36841);
+
+    /*
+    for node in condensed.nodes() {
+        let pos = topsort.iter().position(|n| *n==node.address()).unwrap();
+        let mut i = 0;
+        for address in &topsort[pos..pos + node.len()] {
+            if i == 0 {
+                println!{"start: {:x} with length {}", node.address(), node.len()};
+            }
+            assert_eq!(*address, node.address()+i);
+            println!("topsort: {:x}, condensed: {:x}", address, node.address()+i);
+            i += 1;
+        }
+    }
+    */
+    
+
+*/
 
 
 
