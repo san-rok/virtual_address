@@ -46,6 +46,7 @@
 use goblin::elf::*;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 // use std::ops::Range;
@@ -63,6 +64,8 @@ use std::collections::BinaryHeap;
 use std::cmp::*;
 
 use serde::{Serialize, Deserialize};
+
+use kendalls::tau_b;
 
 // PART 01: Binary struct
 
@@ -547,7 +550,7 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
 
 // in the ordering of the block only the number of instructions matter
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct NoInstrBasicBlock {
     address: u64,
     len: usize,
@@ -614,7 +617,7 @@ impl Ord for NoInstrBasicBlock {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct VirtualAddressGraph {
     address: u64,
     nodes: Vec<NoInstrBasicBlock>,
@@ -757,6 +760,13 @@ impl VirtualAddressGraph {
 
     }
 
+    // from graph to .dot
+    /*
+    fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
+        dot2::render(self, output)
+    }
+    */
+
 }
 
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
@@ -813,6 +823,80 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 }
 
 
+/*
+impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
+    type Node = u64;
+    type Edge = (u64, u64);
+    type Subgraph = ();
+
+    // .dot compatible identifier naming the graph
+    fn graph_id(&'a self) -> dot2::Result<dot2::Id<'a>> {
+        dot2::Id::new("control_length_flow")
+    }
+
+    // maps n to unique (valid .dot) identifier 
+    fn node_id(&'a self, n: &Self::Node) -> dot2::Result<dot2::Id<'a>> {
+        dot2::Id::new(format!("N0x{:x}", n))
+    }
+
+    // labels of nodes
+    fn node_label(&'a self, n: &Self::Node) -> dot2::Result<dot2::label::Text<'a>> {
+        let label = self
+            .nodes()
+            .iter()
+            .find(|&v| v.address() == *n)
+            .map(|v| format!("{:x}: {}", v.address(), v.len()))
+            .unwrap();
+
+        Ok(dot2::label::Text::LabelStr(
+            label.into()
+        ))
+    }
+
+}
+
+
+impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
+    type Node = u64;
+    type Edge = (u64, u64);
+    type Subgraph = ();
+
+    // all nodes of the graph
+    fn nodes(&self) -> dot2::Nodes<'a, Self::Node> {
+        self.nodes().iter().map(|n| n.address()).collect()
+    }
+
+    // all edges of the graph
+    fn edges(&'a self) -> dot2::Edges<'a, Self::Edge> {
+
+        let mut edges: Vec<(u64, u64)> = Vec::new();
+
+        for block in self.nodes() {
+            let source = block.address();
+            for target in block.targets() {
+                edges.push( (source, *target) );
+            }
+        }
+
+        edges.into_iter().collect()
+    }
+
+    // source node for the given edge
+    fn source(&self, edge: &Self::Edge) -> Self::Node {
+        let &(s,_) = edge;
+        s
+    }
+
+    // target node for the given edge
+    fn target(&self, edge: &Self::Edge) -> Self::Node {
+        let &(_,t) = edge;
+        t
+    }
+
+}
+*/
+
+
 #[derive(Debug)]
 struct KahnBasicBlock<'a> {
     block: &'a NoInstrBasicBlock,
@@ -831,7 +915,6 @@ impl<'a> KahnBasicBlock<'a> {
         self.block
     }
 
-    /*
     fn len(&self) -> usize {
         self.block.len()
     }
@@ -839,7 +922,6 @@ impl<'a> KahnBasicBlock<'a> {
     fn targets(&self) -> &'a [u64] {
         self.block.targets()
     }
-    */
 
     fn indegree(&self) -> usize {
         self.block.indegree()
@@ -911,12 +993,10 @@ impl<'a> KahnGraph<'a> {
             .unwrap()
     }
 
-    /*
     fn node_at_target(&self, target: u64) -> &KahnBasicBlock<'a> {
         let pos = self.position(target);
         &self.nodes()[pos]
     }
-    */
 
     fn node_at_target_mut(&mut self, target: u64) -> &mut KahnBasicBlock<'a> {
         let pos = self.position(target);
@@ -1007,21 +1087,169 @@ fn main() {
 
 
     let condensed = vag.condense();
-    println!("{:#x?}", condensed);
+    // println!("{:#x?}", condensed);
 
     // Kahn's algorithm
     let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
 
-    println!("{:#x?}", kahngraph);
+    // println!("{:#x?}", kahngraph);
+
+    let mut initial_order: Vec<u64> = Vec::new();
+        for node in kahngraph.nodes() {
+            initial_order.push(node.address());
+        }
+    initial_order.sort();
 
     let topsort = kahngraph.kahn_algorithm();
     println!("starting block's address: {:x}", kahngraph.address());
-    println!("{:#x?}", topsort);
 
+    for i in 0..topsort.len() {
+        println!("{:x}, {:x}", initial_order[i], topsort[i]);
+    }
+
+    let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
+    println!("kendall tau: {:#?} \n", kendall_tau);
+
+    // println!("{:#x?}", topsort);
+
+
+    // weight of an order
+    /*
+    let mut order_weight: usize = 0;
+    for node in kahngraph.nodes() {
+        for target in node.targets() {
+            let pos01: usize = initial_order
+                .binary_search(&node.address())
+                .unwrap();
+            let pos02: usize = initial_order
+                .binary_search(&target)
+                .unwrap();
+
+            let mut edge_weight: usize = 0;
+
+            // no backtracking due to the order
+            for block in kahngraph.nodes()[min(pos01, pos02)+1 .. max(pos01, pos02)].iter() {
+                edge_weight += block.len();
+            }
+            
+            order_weight = order_weight + edge_weight;
+        }
+    }
+
+    println!("weight of original order: {}", order_weight);
+    */
+
+    /*
+    let mut sort_weight: usize = 0;
+    for node in kahngraph.nodes() {
+        for target in node.targets() {
+
+            let mut pos: usize = topsort
+                .iter()
+                .position(|&x| x == node.address())
+                .unwrap();
+                
+            while topsort[pos] != target {
+
+                kahngraph.node_at_target(topsort)
+
+            }
+                
+
+
+        }
+    }
+    */
+
+
+    // test dags 
+    let file = std::fs::File::open("dag.yaml").unwrap();
+    let dags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
+
+    let mut topsorts: HashMap<u64, Vec<u64>> = HashMap::new();
+
+    // let mut ordered: Vec<TestGraph> = Vec::new();
+
+    for mut dag in dags {
+        dag.update_in_degrees();
+
+        let mut kahngraph: KahnGraph = KahnGraph::from_vag(&dag);
+        let topsort = kahngraph.kahn_algorithm();
+
+        let mut initial_order: Vec<u64> = Vec::new();
+        for node in kahngraph.nodes() {
+            initial_order.push(node.address());
+        }
+        initial_order.sort();
+
+        let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
+
+        println!("starting block's address: {:x}", kahngraph.address());
+        println!("initial order: {:x?}", initial_order);
+        println!("topological sort: {:x?}", topsort);
+
+        println!("kendall tau: {:#?} \n", kendall_tau);
+    }
+
+        
+
+        /*
+        if kendall_tau < 0.2 {
+
+            let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
+            dag.render_to(&mut file).unwrap();
+
+            println!("starting block's address: {:x}", kahngraph.address());
+            println!("initial order: {:x?}", initial_order);
+            println!("topological sort: {:x?}", topsort);
+
+            println!("kendall tau: {:#?} \n", kendall_tau);
+
+
+            
+
+            
+
+
+            
+            
+            serde_yaml::to_string(&test).unwrap();
+
+            break;
+
+        }
+
+         */
+
+        
+
+        topsorts.insert(kahngraph.address(), topsort);
+
+        /*
+        let mut ordered_dags = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("ordered_dags.yaml")
+            .expect("couldn't open file");
+        serde_yaml::to_writer(ordered_dags, &ordered).unwrap();
+        */
+
+
+
+     
     
 
 }
 
+/*
+#[derive(Serialize, Deserialize, Debug)]
+struct TestGraph {
+    graph: VirtualAddressGraph,
+    kendall_tau: f64,
+    original_order: Vec<u64>,
+    topsort_order: Vec<u64>,
+}
+*/
 
 // PART 03B: list of instructions
 // hint: use petgraph crate: https://docs.rs/petgraph/latest/petgraph/algo/dominators/index.html
