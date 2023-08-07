@@ -62,6 +62,8 @@ use std::collections::BinaryHeap;
 
 use std::cmp::*;
 
+use serde::{Serialize, Deserialize};
+
 // PART 01: Binary struct
 
 struct Binary {
