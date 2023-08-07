@@ -13,3 +13,4 @@ iced-x86 = "1.1.0"
 petgraph = "0.6.3"
 serde = { version = "1.0.179", features = ["derive"] }
 serde_yaml = "0.9.25"
+kendalls = "0.2.1"
