@@ -46,7 +46,7 @@
 use goblin::elf::*;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 // use std::ops::Range;
@@ -692,7 +692,6 @@ impl VirtualAddressGraph {
         &mut self.nodes
     }
 
-
     // generates the condensed vag - using petgraph::algo::tarjan_scc
     fn condense(&self) -> Self {
         
@@ -805,9 +804,11 @@ impl VirtualAddressGraph {
     }
 
     // from graph to .dot
+    /*
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
+    */
 
 }
 
@@ -1108,7 +1109,7 @@ fn main() {
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
     let binary = Binary::from_elf(path);
 
-    let virtual_address: u64 =  0x8f41;
+    let virtual_address: u64 =  0x96b4;
     // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840, 0x8f41, 0x970b
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
@@ -1122,6 +1123,12 @@ fn main() {
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
     // println!("{:#x?}", vag);
     
+    let components: Vec<Component> = Component::from_vag(&vag);
+    for comp in components.iter() {
+        println!("{:#x?}", comp);
+    }
+    
+
     // let scc = tarjan_scc(&vag);
     // println!("{:#x?}", scc);
 
@@ -1154,13 +1161,12 @@ fn main() {
     println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
 
 
+    /*
     // test dags 
     let file = std::fs::File::open("dag.yaml").unwrap();
     let dags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
 
-    // let mut topsorts: HashMap<u64, Vec<u64>> = HashMap::new();
-
-    // let mut ordered: Vec<TestGraph> = Vec::new();
+    
 
     let mut better_cost: usize = 0;
 
@@ -1208,56 +1214,211 @@ fn main() {
     }
 
 
-    println!("number of better cost cases: {}", better_cost);
-        
+    println!("number of better cost cases: {}", better_cost);    
 
-        /*
-        if kendall_tau < 0.2 {
-
-            let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
-            dag.render_to(&mut file).unwrap();
-
-            println!("starting block's address: {:x}", kahngraph.address());
-            println!("initial order: {:x?}", initial_order);
-            println!("topological sort: {:x?}", topsort);
-
-            println!("kendall tau: {:#?} \n", kendall_tau);
+    */
 
 
-            
-
-            
-
-
-            
-            
-            serde_yaml::to_string(&test).unwrap();
-
-            break;
-
-        }
-
-         */
-
-        
-
-        // topsorts.insert(kahngraph.address(), topsort);
-
-        /*
-        let mut ordered_dags = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open("ordered_dags.yaml")
-            .expect("couldn't open file");
-        serde_yaml::to_writer(ordered_dags, &ordered).unwrap();
-        */
-
-
-        
-     
-    
+    // let mut ordered: Vec<TestGraph> = Vec::new();
 
 }
+
+
+
+
+#[derive(Debug)]
+struct Component {
+    in_edges: Vec<(u64, u64)>,
+    component: VirtualAddressGraph,
+    out_edges: Vec<(u64, u64)>,
+}
+
+
+impl Component {
+
+    fn from_vag(vag: &VirtualAddressGraph) -> Vec<Self> {
+
+        let mut components: Vec<Self> = Vec::new();
+
+        // tarjan_scc -> vector of strongly connected component's addresses vector
+        let scc: Vec<Vec<u64>> = tarjan_scc(vag);
+
+        // ad hoc choice:
+        // the node label for a sc component = first node's label in tarjan's output
+        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
+        for comp in &scc {
+            let value = comp[0];
+            for node in comp {
+                comp_dict.insert(*node, value);
+            }
+        }
+
+
+
+        for component in &scc {
+            let address: u64 = component[0];
+            let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+            let mut targets: Vec<(u64, u64)> = Vec::new();
+            let mut sources: Vec<(u64, u64)> = Vec::new();
+
+
+
+            for addr in component {
+
+                let pos = vag
+                    .nodes()
+                    .binary_search_by(|block| block.address().cmp(&addr))
+                    .unwrap();
+                let node = &vag.nodes()[pos];
+
+                // edges leave component
+                for target in node.targets() {
+                    if !component.contains(target) {
+                        targets.push((*addr,*target));
+                    }
+                }
+
+                // edges enter component
+                for block in vag.nodes() {
+                    for target in block.targets() {
+                        if target == addr && !component.contains(&block.address()) {
+                            sources.push((block.address(), *addr));
+                        }
+                    }
+                }
+
+                // isn't this clone() too much?
+                // maybe we only need reference the original
+                nodes.push(node.clone());
+
+            }
+
+            
+
+           
+            components.push(
+                Component { 
+                    in_edges: sources, 
+                    component: VirtualAddressGraph { 
+                        address: address, 
+                        nodes: nodes,
+                    },
+                    out_edges: targets,
+                }
+            );
+        }
+        
+        components
+
+    }
+
+    fn in_edges(&self) -> &[(u64, u64)] {
+        &self.in_edges
+    }
+
+    fn address(&self) -> u64 {
+        self.component.address()
+    }
+
+    // it must create a new VAG - since the end vertex can be a new target for many nodes
+    // MAYBE: I'm in a wrong mindset ...
+    fn to_phantom_vag(&self) -> () {
+
+        // let mut blocks: Vec<NoInstrBasicBlock> = Vec::new();
+
+        /*
+        
+        NoInstrBasicBlock { 
+                address: 0, 
+                len: 1, 
+                targets: self.in_edges().iter().map(|(x,y)| *y).collect(),
+                indegree: 0,
+            }
+        
+        */
+
+        
+
+        
+
+    }
+
+    // generates the condensed vag - using petgraph::algo::tarjan_scc
+    /*
+    fn condense(&self) -> Self {
+        
+        // tarjan_scc returns reversed topological order
+        let scc = tarjan_scc(self);
+
+        // the node label for a sc component = first node's label in tarjan's output
+        // the dictionary is stored in a HashMap -> effectiveness ?
+        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
+        for comp in &scc {
+            let value = comp[0];
+            for node in comp {
+                comp_dict.insert(*node, value);
+            }
+        }
+
+        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+        for comp in &scc {
+        
+            let address: u64 = comp[0];
+            let mut length: usize = 0;
+            let mut targets: Vec<u64> = Vec::new();
+
+            for node in comp {
+
+                let pos = self
+                    .nodes()
+                    .binary_search_by(|block| block.address().cmp(&node))
+                    .unwrap();
+                let node = &self.nodes()[pos];
+
+                length = length + node.len();
+
+                for target in node.targets() {
+                    if !(comp.contains(target) || targets.contains(target)) {
+                        // is this .get() fast for BTreeMap ??
+                        targets.push( *(comp_dict.get(target).unwrap()) );
+                    }
+                }   
+            }
+
+            nodes.push(
+                NoInstrBasicBlock { 
+                    address: address, 
+                    len: length, 
+                    targets: targets,
+                    indegree: 0 as usize,
+                }
+            );
+        }
+
+        // for later use: sort by address
+        nodes.sort_by_key(|node| node.address());
+
+        let mut vag =
+        VirtualAddressGraph { 
+            address: self.address(),
+            nodes: nodes,
+        };
+
+        vag.update_in_degrees();
+
+        vag
+
+    }
+     */
+
+
+
+
+}
+
+
 
 /*
 #[derive(Serialize, Deserialize, Debug)]
