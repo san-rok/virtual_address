@@ -760,12 +760,54 @@ impl VirtualAddressGraph {
 
     }
 
+
+    fn cost_of_order(&self, order: Vec<u64>) -> usize {
+
+        let mut ordered: Vec<&NoInstrBasicBlock> = Vec::new();
+        let mut cost: usize = 0;
+
+        for address in &order {
+            let pos = self
+                .nodes()
+                .binary_search_by(|x| x.address().cmp(address))
+                .unwrap();
+            ordered.push(&self.nodes()[pos]);
+        }
+
+        let mut pos01 = 0;
+        for block in &ordered {
+            /*
+            let pos01: usize = order
+                .iter()
+                .position(|x| x == block.address());
+            */
+            for target in block.targets() {
+                let mut edge_weight: usize = 0;
+
+                let pos02: usize = order
+                    .iter()
+                    .position(|x| x == target)
+                    .unwrap();
+
+                for node in &ordered[min(pos01, pos02)+1 .. max(pos01, pos02)] {
+                        edge_weight += node.len();
+                }
+
+                cost = cost + edge_weight;
+
+            }
+
+
+            pos01 += 1;
+        }
+
+        cost
+    }
+
     // from graph to .dot
-    /*
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
-    */
 
 }
 
@@ -823,7 +865,6 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 }
 
 
-/*
 impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
     type Node = u64;
     type Edge = (u64, u64);
@@ -894,7 +935,6 @@ impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
     }
 
 }
-*/
 
 
 #[derive(Debug)]
@@ -1110,65 +1150,19 @@ fn main() {
     let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
     println!("kendall tau: {:#?} \n", kendall_tau);
 
-    // println!("{:#x?}", topsort);
-
-
-    // weight of an order
-    /*
-    let mut order_weight: usize = 0;
-    for node in kahngraph.nodes() {
-        for target in node.targets() {
-            let pos01: usize = initial_order
-                .binary_search(&node.address())
-                .unwrap();
-            let pos02: usize = initial_order
-                .binary_search(&target)
-                .unwrap();
-
-            let mut edge_weight: usize = 0;
-
-            // no backtracking due to the order
-            for block in kahngraph.nodes()[min(pos01, pos02)+1 .. max(pos01, pos02)].iter() {
-                edge_weight += block.len();
-            }
-            
-            order_weight = order_weight + edge_weight;
-        }
-    }
-
-    println!("weight of original order: {}", order_weight);
-    */
-
-    /*
-    let mut sort_weight: usize = 0;
-    for node in kahngraph.nodes() {
-        for target in node.targets() {
-
-            let mut pos: usize = topsort
-                .iter()
-                .position(|&x| x == node.address())
-                .unwrap();
-                
-            while topsort[pos] != target {
-
-                kahngraph.node_at_target(topsort)
-
-            }
-                
-
-
-        }
-    }
-    */
+    println!("cost of original order: {}", condensed.cost_of_order(initial_order));
+    println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
 
 
     // test dags 
     let file = std::fs::File::open("dag.yaml").unwrap();
     let dags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
 
-    let mut topsorts: HashMap<u64, Vec<u64>> = HashMap::new();
+    // let mut topsorts: HashMap<u64, Vec<u64>> = HashMap::new();
 
     // let mut ordered: Vec<TestGraph> = Vec::new();
+
+    let mut better_cost: usize = 0;
 
     for mut dag in dags {
         dag.update_in_degrees();
@@ -1182,15 +1176,39 @@ fn main() {
         }
         initial_order.sort();
 
+        println!("starting block's address: {:x}", kahngraph.address());
+
+        for i in 0..topsort.len() {
+            println!("{:x}, {:x}", initial_order[i], topsort[i]);
+        }
+    
+
         let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
 
-        println!("starting block's address: {:x}", kahngraph.address());
-        println!("initial order: {:x?}", initial_order);
-        println!("topological sort: {:x?}", topsort);
+        // println!("initial order: {:x?}", initial_order);
+        // println!("topological sort: {:x?}", topsort);
 
-        println!("kendall tau: {:#?} \n", kendall_tau);
+        let original_cost: usize = dag.cost_of_order(initial_order);
+        let sorted_cost: usize = dag.cost_of_order(topsort);
+
+        println!("kendall tau: {:#?}", kendall_tau);
+        println!("cost of original order: {}", original_cost);
+        println!("cost of topological sort: {} \n", sorted_cost);
+
+        if sorted_cost <= original_cost {
+            better_cost += 1;
+        }
+
+
+        // some addresses with big differences: 0x1800c17b0
+        if dag.address() == 0x1800c1530 {
+            let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
+            dag.render_to(&mut file).unwrap();
+        }
     }
 
+
+    println!("number of better cost cases: {}", better_cost);
         
 
         /*
@@ -1223,7 +1241,7 @@ fn main() {
 
         
 
-        topsorts.insert(kahngraph.address(), topsort);
+        // topsorts.insert(kahngraph.address(), topsort);
 
         /*
         let mut ordered_dags = std::fs::OpenOptions::new()
@@ -1235,7 +1253,7 @@ fn main() {
         */
 
 
-
+        
      
     
 
