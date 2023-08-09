@@ -14,6 +14,10 @@
 // https://training.github.com/downloads/github-git-cheat-sheet/
 
 
+// smt solver
+// pgo - pref
+// break griffin/th
+
 // "rop"-olni
 
 // aida 
@@ -46,6 +50,7 @@
 use goblin::elf::*;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
+use petgraph::visit::*;
 // use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -57,7 +62,7 @@ use std::fmt;
 use iced_x86::*;
 
 use std::collections::BTreeMap;
-// use std::collections::HashSet;
+use std::collections::HashSet;
 // use std::collections::HashMap;
 use std::collections::BinaryHeap;
 
@@ -573,6 +578,15 @@ impl NoInstrBasicBlock {
         &self.targets
     }
 
+    fn add_target(&mut self, target: u64) {
+        self.targets.push(target);
+    }
+
+    // TODO: error handling
+    fn erease_target(&mut self, target: u64) {
+        self.targets.retain(|&x| x != target);
+    }
+
     fn indegree(&self) -> usize {
         self.indegree
     }
@@ -692,6 +706,21 @@ impl VirtualAddressGraph {
         &mut self.nodes
     }
 
+    // reference to a node with a given address
+    fn node_at_target(&self, target: u64) -> &NoInstrBasicBlock {
+        // TODO: error handling
+
+        // VAG is ordered by addresses
+        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
+        &self.nodes()[pos]
+    }
+
+    fn node_at_target_mut(&mut self, target: u64) -> &mut NoInstrBasicBlock {
+        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        &mut self.nodes_mut()[pos]
+    }
+
     // generates the condensed vag - using petgraph::algo::tarjan_scc
     fn condense(&self) -> Self {
         
@@ -803,6 +832,72 @@ impl VirtualAddressGraph {
         cost
     }
 
+
+
+    // collection of such edges that generates cycles in the component
+    // TODO: error handling - no backedges when graph is acyclic
+    fn backedges(&self) -> Vec<(u64, u64)> {
+
+        let mut backedges: Vec<(u64,u64)> = Vec::new();
+
+        depth_first_search(self, Some(self.address()), |event| {
+            if let DfsEvent::BackEdge(u, v) = event {
+                backedges.push((u,v));
+            }
+        });
+    
+        backedges
+    }
+
+
+    // add the given edge to the VAG
+    fn add_edge(&mut self, edge: (u64, u64)) {
+
+        self.node_at_target_mut(edge.0).add_target(edge.1);
+
+    }
+
+    // add the given edges to the VAG
+    // the edges vec<(u64, u64)> needs to be ordered
+    fn add_edges(&mut self, edges: &Vec<(u64,u64)>) {
+
+        // TODO: optimalize !!
+        for &edge in edges {
+            self.add_edge(edge);
+        }
+        
+
+    }
+
+    // erease the given edge from the VAG
+    fn erease_edge(&mut self, edge: (u64, u64)) {
+        self.node_at_target_mut(edge.0).erease_target(edge.1);
+    }
+
+    // erease the given edges to the VAG
+    fn erease_edges(&mut self, edges: &Vec<(u64, u64)>)  {
+
+        // TODO: optimalize !!
+        for &edge in edges {
+            self.erease_edge(edge);
+        }
+
+    }
+
+
+
+
+
+    }
+
+
+
+    // add phantom start
+    // add phantom end
+
+    // TBC ...
+
+
     // from graph to .dot
     /*
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
@@ -810,7 +905,6 @@ impl VirtualAddressGraph {
     }
     */
 
-}
 
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
 // NOTE: there is a topologiccal sort in petgraph - but it is DFS based
@@ -865,7 +959,22 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
 }
 
+impl petgraph::visit::Visitable for VirtualAddressGraph {
+    type Map = HashSet<Self::NodeId>;
 
+    fn visit_map(&self) -> Self::Map {
+        HashSet::with_capacity(self.nodes().len())
+    }
+
+    fn reset_map(&self, map: &mut Self::Map) {
+        map.clear()
+    }
+}
+
+
+
+
+/*
 impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
     type Node = u64;
     type Edge = (u64, u64);
@@ -936,6 +1045,7 @@ impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
     }
 
 }
+*/
 
 
 #[derive(Debug)]
@@ -1110,7 +1220,7 @@ fn main() {
     let binary = Binary::from_elf(path);
 
     let virtual_address: u64 =  0x96b4;
-    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840, 0x8f41, 0x970b
+    // test: 0x88cb, 0x8870, 0x88b0, 0x8a0d, 0x893e, 0x88f0, 0x8c81, 0x8840, 0x8f41, 0x970b, 0x96b4
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
@@ -1123,10 +1233,27 @@ fn main() {
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
     // println!("{:#x?}", vag);
     
+    
     let components: Vec<Component> = Component::from_vag(&vag);
-    for comp in components.iter() {
-        println!("{:#x?}", comp);
+
+    /*
+    for comp in components {
+        let incoming = comp.incoming_edges();
+        let outgoing = comp.outgoing_edges();
+        println!("incoming edges:");
+        for (source, target) in incoming {
+            println!("{:x} --> {:x}", source, target);
+        }
+        println!("nodes:");
+        for node in comp.nodes() {
+            println!("{:x}", node);
+        }
+        println!("outgoing edges:");
+        for (source, target)in outgoing {
+            println!("{:x} --> {:x}", source, target);
+        }
     }
+    */
     
 
     // let scc = tarjan_scc(&vag);
@@ -1160,6 +1287,17 @@ fn main() {
     println!("cost of original order: {}", condensed.cost_of_order(initial_order));
     println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
 
+
+
+    // WHAT DO WE NEED FOR CYCLE BREAKING?
+    //      (0) a Components struct: reference for the original VAG, Hash set of subgraph node ids
+    //          (0.a) using these field methods can derive the incoming and outgoing edges !!
+    //      (1) finds all the bad edges, constituting for cycles
+    //      (2) puts back edges - or simply add edges for a VAG instance
+    //      (3) adds a starting node to the cycle free VAG: label = 0x0; edges = all the input edges; length = large
+    //      (4) adds a terminating node to the cycle free instance: label = 0xfffffffff; edges = all the output edges; length = 0
+    //      (5) calculates the order - hopefully use our previous method
+    //      (6) inserts back the ordered list to the scc's ordered list in the appropriate place
 
     /*
     // test dags 
@@ -1224,199 +1362,145 @@ fn main() {
 }
 
 
-
-
 #[derive(Debug)]
-struct Component {
-    in_edges: Vec<(u64, u64)>,
-    component: VirtualAddressGraph,
-    out_edges: Vec<(u64, u64)>,
+struct Component<'a> {
+    // the original graph
+    graph: &'a VirtualAddressGraph,
+    // the strongly connected component
+    component: HashSet<u64>,
 }
 
+impl<'a> Component<'a> {
 
-impl Component {
-
-    fn from_vag(vag: &VirtualAddressGraph) -> Vec<Self> {
+    // given a VAG instance returns a vector of its components
+    fn from_vag(vag: &'a VirtualAddressGraph) -> Vec<Self> {
 
         let mut components: Vec<Self> = Vec::new();
 
         // tarjan_scc -> vector of strongly connected component's addresses vector
         let scc: Vec<Vec<u64>> = tarjan_scc(vag);
 
-        // ad hoc choice:
-        // the node label for a sc component = first node's label in tarjan's output
-        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
-        for comp in &scc {
-            let value = comp[0];
+        for comp in scc {
+            let mut strongly: HashSet<u64> = HashSet::new();
             for node in comp {
-                comp_dict.insert(*node, value);
-            }
-        }
-
-
-
-        for component in &scc {
-            let address: u64 = component[0];
-            let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
-
-            let mut targets: Vec<(u64, u64)> = Vec::new();
-            let mut sources: Vec<(u64, u64)> = Vec::new();
-
-
-
-            for addr in component {
-
-                let pos = vag
-                    .nodes()
-                    .binary_search_by(|block| block.address().cmp(&addr))
-                    .unwrap();
-                let node = &vag.nodes()[pos];
-
-                // edges leave component
-                for target in node.targets() {
-                    if !component.contains(target) {
-                        targets.push((*addr,*target));
-                    }
+                // TODO: if let not ??
+                match strongly.insert(node) {
+                    false => println!("the node {} is already in", node),
+                    true => (),
                 }
-
-                // edges enter component
-                for block in vag.nodes() {
-                    for target in block.targets() {
-                        if target == addr && !component.contains(&block.address()) {
-                            sources.push((block.address(), *addr));
-                        }
-                    }
-                }
-
-                // isn't this clone() too much?
-                // maybe we only need reference the original
-                nodes.push(node.clone());
-
             }
 
-            
-
-           
             components.push(
-                Component { 
-                    in_edges: sources, 
-                    component: VirtualAddressGraph { 
-                        address: address, 
-                        nodes: nodes,
-                    },
-                    out_edges: targets,
+                Self { 
+                    graph: vag,
+                    component: strongly,
                 }
-            );
+            )
         }
-        
+
         components
 
     }
 
-    fn in_edges(&self) -> &[(u64, u64)] {
-        &self.in_edges
+    // returns a reference to the original graph
+    fn whole(&self) -> &VirtualAddressGraph {
+        self.graph
     }
 
-    fn address(&self) -> u64 {
-        self.component.address()
+    // returns the collection of nodes in the strongly connnected component
+    fn nodes(&self) -> &HashSet<u64> {
+        &self.component
     }
 
-    // it must create a new VAG - since the end vertex can be a new target for many nodes
-    // MAYBE: I'm in a wrong mindset ...
-    fn to_phantom_vag(&self) -> () {
+    // checks if a given node is in the component
+    fn contains(&self, node: u64) -> bool {
+        self.nodes().contains(&node)
+    }
 
-        // let mut blocks: Vec<NoInstrBasicBlock> = Vec::new();
+    // checks if a component is trivial, i.e. it's a single node
+    fn trivial(&self) -> bool {
+        if self.nodes().len() == 1 {
+            true
+        } else {
+            false
+        }
+    }
 
-        /*
-        
-        NoInstrBasicBlock { 
-                address: 0, 
-                len: 1, 
-                targets: self.in_edges().iter().map(|(x,y)| *y).collect(),
-                indegree: 0,
+    // returns a reference to the targets of a given vertex in the component
+    fn targets(&self, node: u64) -> &[u64] {
+        self.whole().node_at_target(node).targets()
+    }
+
+    // a collection of incoming edges
+    // TODO: HashSet or Vector ??
+    fn incoming_edges(&self) -> Vec<(u64, u64)> {
+
+        let mut incoming: Vec<(u64, u64)> = Vec::new();
+
+        for node in self.nodes() {
+
+            for block in self.whole().nodes() {
+                for target in block.targets() {
+                    if target == node && !self.contains(block.address()) {
+                        incoming.push((block.address(), *node))
+                    }
+                }
             }
-        
-        */
 
-        
+        }
 
-        
+        // sorted by source and then target
+        incoming.sort_by_key(|item| (item.0, item.0) );
+        incoming
 
     }
 
-    // generates the condensed vag - using petgraph::algo::tarjan_scc
-    /*
-    fn condense(&self) -> Self {
-        
-        // tarjan_scc returns reversed topological order
-        let scc = tarjan_scc(self);
+    // a collection of outgoing edges
+    // TODO: HashSet or Vector ??
+    fn outgoing_edges(&self) -> Vec<(u64, u64)> {
 
-        // the node label for a sc component = first node's label in tarjan's output
-        // the dictionary is stored in a HashMap -> effectiveness ?
-        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
-        for comp in &scc {
-            let value = comp[0];
-            for node in comp {
-                comp_dict.insert(*node, value);
+        let mut outgoing: Vec<(u64, u64)> = Vec::new();
+
+        for &node in self.nodes() {
+            for &target in self.targets(node) {
+                if !self.contains(target) {
+                    outgoing.push((node, target));
+                }
             }
         }
+
+        // sorted by source and then target
+        outgoing.sort_by_key(|item| (item.0, item.0) );
+        outgoing
+
+    }
+
+    // TODO: make this better, that is no copying blocks !!!
+    // maybe we should have not a VirtualAddressGraph, just a vector of &NoInstrBasicBlock references
+    fn to_vag(&self) -> VirtualAddressGraph {
+
+        let address = self.nodes().iter().min().unwrap();
 
         let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
-
-        for comp in &scc {
-        
-            let address: u64 = comp[0];
-            let mut length: usize = 0;
-            let mut targets: Vec<u64> = Vec::new();
-
-            for node in comp {
-
-                let pos = self
-                    .nodes()
-                    .binary_search_by(|block| block.address().cmp(&node))
-                    .unwrap();
-                let node = &self.nodes()[pos];
-
-                length = length + node.len();
-
-                for target in node.targets() {
-                    if !(comp.contains(target) || targets.contains(target)) {
-                        // is this .get() fast for BTreeMap ??
-                        targets.push( *(comp_dict.get(target).unwrap()) );
-                    }
-                }   
-            }
-
-            nodes.push(
-                NoInstrBasicBlock { 
-                    address: address, 
-                    len: length, 
-                    targets: targets,
-                    indegree: 0 as usize,
-                }
-            );
+        for node in self.nodes() {
+            nodes.push(self.whole().node_at_target(*node).clone());
         }
 
-        // for later use: sort by address
-        nodes.sort_by_key(|node| node.address());
-
-        let mut vag =
         VirtualAddressGraph { 
-            address: self.address(),
+            address: *address, 
             nodes: nodes,
-        };
-
-        vag.update_in_degrees();
-
-        vag
+        }
 
     }
-     */
 
+    
 
 
 
 }
+
+
+
 
 
 
@@ -1770,9 +1854,6 @@ let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
         }
         
     }
-*/
-
-/*
 
     let mut topsort: Vec<u64> = Vec::new();
     let mut visit: BinaryHeap<&NoInstrBasicBlock> = BinaryHeap::new();
@@ -1918,6 +1999,202 @@ let mut component_dictionary: HashMap<u64, u64> = HashMap::new();
     
 
 */
+
+/*
+#[derive(Debug)]
+struct Component {
+    in_edges: Vec<(u64, u64)>,
+    component: VirtualAddressGraph,
+    out_edges: Vec<(u64, u64)>,
+}
+
+
+impl Component {
+
+    fn from_vag(vag: &VirtualAddressGraph) -> Vec<Self> {
+
+        let mut components: Vec<Self> = Vec::new();
+
+        // tarjan_scc -> vector of strongly connected component's addresses vector
+        let scc: Vec<Vec<u64>> = tarjan_scc(vag);
+
+        // ad hoc choice:
+        // the node label for a sc component = first node's label in tarjan's output
+        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
+        for comp in &scc {
+            let value = comp[0];
+            for node in comp {
+                comp_dict.insert(*node, value);
+            }
+        }
+
+
+
+        for component in &scc {
+            let address: u64 = component[0];
+            let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+            let mut targets: Vec<(u64, u64)> = Vec::new();
+            let mut sources: Vec<(u64, u64)> = Vec::new();
+
+
+
+            for addr in component {
+
+                let pos = vag
+                    .nodes()
+                    .binary_search_by(|block| block.address().cmp(&addr))
+                    .unwrap();
+                let node = &vag.nodes()[pos];
+
+                // edges leave component
+                for target in node.targets() {
+                    if !component.contains(target) {
+                        targets.push((*addr,*target));
+                    }
+                }
+
+                // edges enter component
+                for block in vag.nodes() {
+                    for target in block.targets() {
+                        if target == addr && !component.contains(&block.address()) {
+                            sources.push((block.address(), *addr));
+                        }
+                    }
+                }
+
+                // isn't this clone() too much?
+                // maybe we only need reference the original
+                nodes.push(node.clone());
+
+            }
+
+            
+
+           
+            components.push(
+                Component { 
+                    in_edges: sources, 
+                    component: VirtualAddressGraph { 
+                        address: address, 
+                        nodes: nodes,
+                    },
+                    out_edges: targets,
+                }
+            );
+        }
+        
+        components
+
+    }
+
+    fn in_edges(&self) -> &[(u64, u64)] {
+        &self.in_edges
+    }
+
+    fn address(&self) -> u64 {
+        self.component.address()
+    }
+
+    // it must create a new VAG - since the end vertex can be a new target for many nodes
+    // MAYBE: I'm in a wrong mindset ...
+    fn to_phantom_vag(&self) -> () {
+
+        // let mut blocks: Vec<NoInstrBasicBlock> = Vec::new();
+
+        /*
+        
+        NoInstrBasicBlock { 
+                address: 0, 
+                len: 1, 
+                targets: self.in_edges().iter().map(|(x,y)| *y).collect(),
+                indegree: 0,
+            }
+        
+        */
+
+        
+
+        
+
+    }
+
+    // generates the condensed vag - using petgraph::algo::tarjan_scc
+    /*
+    fn condense(&self) -> Self {
+        
+        // tarjan_scc returns reversed topological order
+        let scc = tarjan_scc(self);
+
+        // the node label for a sc component = first node's label in tarjan's output
+        // the dictionary is stored in a HashMap -> effectiveness ?
+        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
+        for comp in &scc {
+            let value = comp[0];
+            for node in comp {
+                comp_dict.insert(*node, value);
+            }
+        }
+
+        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+        for comp in &scc {
+        
+            let address: u64 = comp[0];
+            let mut length: usize = 0;
+            let mut targets: Vec<u64> = Vec::new();
+
+            for node in comp {
+
+                let pos = self
+                    .nodes()
+                    .binary_search_by(|block| block.address().cmp(&node))
+                    .unwrap();
+                let node = &self.nodes()[pos];
+
+                length = length + node.len();
+
+                for target in node.targets() {
+                    if !(comp.contains(target) || targets.contains(target)) {
+                        // is this .get() fast for BTreeMap ??
+                        targets.push( *(comp_dict.get(target).unwrap()) );
+                    }
+                }   
+            }
+
+            nodes.push(
+                NoInstrBasicBlock { 
+                    address: address, 
+                    len: length, 
+                    targets: targets,
+                    indegree: 0 as usize,
+                }
+            );
+        }
+
+        // for later use: sort by address
+        nodes.sort_by_key(|node| node.address());
+
+        let mut vag =
+        VirtualAddressGraph { 
+            address: self.address(),
+            nodes: nodes,
+        };
+
+        vag.update_in_degrees();
+
+        vag
+
+    }
+     */
+
+
+
+
+}
+
+
+ */
 
 
 
