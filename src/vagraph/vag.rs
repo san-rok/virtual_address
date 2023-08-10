@@ -34,7 +34,7 @@ impl NoInstrBasicBlock {
     }
 
     // the number of instructions 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.len
     }
 
@@ -80,7 +80,7 @@ impl NoInstrBasicBlock {
             address: bb.address(), 
             len: bb.instructions().len(), 
             targets: bb.targets().to_vec(),
-            indegree: 0 as usize,
+            indegree: 0_usize,
         }
 
     }
@@ -127,8 +127,8 @@ impl VirtualAddressGraph {
     // need: keep the fields private from scc
     pub fn new(address: u64, nodes: Vec<NoInstrBasicBlock>) -> Self {
         VirtualAddressGraph { 
-            address: address, 
-            nodes: nodes,
+            address, 
+            nodes,
         }
     }
 
@@ -175,7 +175,7 @@ impl VirtualAddressGraph {
         let mut vag = 
         VirtualAddressGraph { 
             address: cfg.address(), 
-            nodes: nodes,
+            nodes,
         };
 
         // TODO: merge this two iterations - more effective algoithm!!
@@ -246,11 +246,11 @@ impl VirtualAddressGraph {
 
                 let pos = self
                     .nodes()
-                    .binary_search_by(|block| block.address().cmp(&node))
+                    .binary_search_by(|block| block.address().cmp(node))
                     .unwrap();
                 let node = &self.nodes()[pos];
 
-                length = length + node.len();
+                length += node.len();
 
                 for target in node.targets() {
                     if !(comp.contains(target) || targets.contains(target)) {
@@ -262,10 +262,10 @@ impl VirtualAddressGraph {
 
             nodes.push(
                 NoInstrBasicBlock { 
-                    address: address, 
+                    address, 
                     len: length, 
-                    targets: targets,
-                    indegree: 0 as usize,
+                    targets,
+                    indegree: 0_usize,
                 }
             );
         }
@@ -276,7 +276,7 @@ impl VirtualAddressGraph {
         let mut vag =
         VirtualAddressGraph { 
             address: self.address(),
-            nodes: nodes,
+            nodes,
         };
 
         vag.update_in_degrees();
@@ -300,8 +300,7 @@ impl VirtualAddressGraph {
             ordered.push(&self.nodes()[pos]);
         }
 
-        let mut pos01 = 0;
-        for block in &ordered {
+        for (pos01, block) in ordered.iter().enumerate() {
             for target in block.targets() {
                 let mut edge_weight: usize = 0;
                 
@@ -318,11 +317,9 @@ impl VirtualAddressGraph {
                     }
                 }
 
-                cost = cost + edge_weight;
+                cost += edge_weight;
 
             }
-
-            pos01 += 1;
         }
 
         cost
@@ -382,7 +379,7 @@ impl VirtualAddressGraph {
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
-    pub fn add_source_vertex(&mut self, in_edges: &Vec<(u64, u64)>) {
+    pub fn add_source_vertex(&mut self, in_edges: &[(u64, u64)]) {
         // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
         // the sources of these edges then are merged into one vertex
@@ -451,9 +448,7 @@ impl VirtualAddressGraph {
         if !(is_cyclic_directed(self)) {
             // Kahn's algorithm
             let mut kahngraph: KahnGraph = KahnGraph::from_vag(self);
-            let topsort = kahngraph.kahn_algorithm();   
-
-            topsort
+            kahngraph.kahn_algorithm()
 
         } else {
             println!("NOT acyclic!");
@@ -574,18 +569,18 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph {
 
 impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
-    fn node_bound(self: &Self) -> usize {
+    fn node_bound(&self) -> usize {
         self.nodes().len()
     }
 
-    fn to_index(self: &Self, a: Self::NodeId) -> usize {
+    fn to_index(&self, a: Self::NodeId) -> usize {
         self
             .nodes()
             .binary_search_by(|block| block.address().cmp(&a))
             .unwrap()
     }
 
-    fn from_index(self: &Self, i:usize) -> Self::NodeId {
+    fn from_index(&self, i:usize) -> Self::NodeId {
         assert!(i < self.nodes().len(),"the requested index {} is out-of-bounds", i);
         self.nodes()[i].address()
     }

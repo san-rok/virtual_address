@@ -62,11 +62,7 @@ impl<'a> Component<'a> {
 
     // checks if a component is trivial, i.e. it's a single node
     pub fn trivial(&self) -> bool {
-        if self.nodes().len() == 1 {
-            true
-        } else {
-            false
-        }
+        self.nodes().len() == 1
     }
 
     // returns a reference to the targets of a given vertex in the component

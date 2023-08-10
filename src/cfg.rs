@@ -322,7 +322,7 @@ impl ControlFlowGraph {
 
         ControlFlowGraph{
             address: va,
-            blocks: blocks,
+            blocks,
         }
     }
 

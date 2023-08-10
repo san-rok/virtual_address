@@ -79,7 +79,7 @@ impl<'a> KahnGraph<'a> {
 
         KahnGraph { 
             address: vag.address(), 
-            nodes: nodes,
+            nodes,
         }
 
     }
