@@ -587,7 +587,7 @@ impl NoInstrBasicBlock {
 
     // TODO: error handling
     // TODO: tell rust there won't be an overflow
-    fn erease_target(&mut self, target: u64) {
+    fn erase_target(&mut self, target: u64) {
         if let Some(pos) = self.targets().iter().position(|x| x == &target) {
             self.targets.remove(pos);
             if self.indegree > 0 {
@@ -880,17 +880,17 @@ impl VirtualAddressGraph {
 
     }
 
-    // erease the given edge from the VAG
-    fn erease_edge(&mut self, edge: (u64, u64)) {
-        self.node_at_target_mut(edge.0).erease_target(edge.1);
+    // erase the given edge from the VAG
+    fn erase_edge(&mut self, edge: (u64, u64)) {
+        self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
 
-    // erease the given edges to the VAG
-    fn erease_edges(&mut self, edges: &Vec<(u64, u64)>)  {
+    // erase the given edges to the VAG
+    fn erase_edges(&mut self, edges: &Vec<(u64, u64)>)  {
 
         // TODO: optimalize !!
         for &edge in edges {
-            self.erease_edge(edge);
+            self.erase_edge(edge);
         }
 
     }
@@ -900,12 +900,12 @@ impl VirtualAddressGraph {
         // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
         // the sources of these edges then are merged into one vertex
-        // with small address and large length
+        // with 0 indegree and large length
         self.add_block(
             NoInstrBasicBlock {
                 address: 0x0,
                 len: 9999,
-                targets: in_edges.iter().map(|(s,t)| *t).collect(),
+                targets: in_edges.iter().map(|(_s,t)| *t).collect(),
                 indegree: 0,
             }
         );
@@ -920,13 +920,13 @@ impl VirtualAddressGraph {
     fn add_target_vertex(&mut self, out_edges: &Vec<(u64, u64)>) {
 
         // delete the original outgoing edges
-        self.erease_edges(out_edges);
+        self.erase_edges(out_edges);
 
         // the targets of these edges then are merged into one vertex
-        // with large address and small length
+        // with given indegree and small length
         self.add_block(
             NoInstrBasicBlock {
-                address: 0xfffffffe,
+                address: 0x1,
                 len: 0,
                 targets: vec![],
                 indegree: out_edges.len(),
@@ -936,7 +936,7 @@ impl VirtualAddressGraph {
         // the new outgoing edges will have this new vertex as target
         let mut new_outgoing: Vec<(u64,u64)> = Vec::new();
         for (source, _target) in out_edges {
-            new_outgoing.push( (*source, 0xfffffffe) );
+            new_outgoing.push( (*source, 0x1) );
         }
 
         // add these newly generated edges
@@ -957,6 +957,7 @@ impl VirtualAddressGraph {
     }
 
 
+
     // gets a VAG and returns the "optimal" order of its vertices
     fn weighted_order(&self) -> Vec<u64> {
         
@@ -964,11 +965,13 @@ impl VirtualAddressGraph {
         if !(is_cyclic_directed(self)) {
             // Kahn's algorithm
             let mut kahngraph: KahnGraph = KahnGraph::from_vag(self);
-            let mut topsort = kahngraph.kahn_algorithm();   
+            let topsort = kahngraph.kahn_algorithm();   
 
             topsort
 
         } else {
+            println!("NOT acyclic!");
+
             // collapse the strongly connected components into single vertices
             let condensed = self.condense();
 
@@ -978,6 +981,7 @@ impl VirtualAddressGraph {
 
             // Kahn's algorithm for the strongly connected components
             let components: Vec<Component> = Component::from_vag(self);
+
             // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
             let mut ordered_components: Vec<Vec<u64>> = Vec::new();
 
@@ -986,13 +990,14 @@ impl VirtualAddressGraph {
                 if !comp.trivial() {
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
+                    // ERROR: println!("{:#x?}", comp_vag);
 
                     // Kahn's algorithm for the given component
                     let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
                     let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
 
                     // delete the auxiliary nodes from the order
-                    ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
+                    ord_comp.retain(|&x| x != 0x0 && x != 0x1);
 
                     ordered_components.push(ord_comp);
                 }
@@ -1030,13 +1035,13 @@ impl VirtualAddressGraph {
     }
 
     // from graph to .dot
-    /*
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
-    */
 
-    }
+
+
+}
 
 
 
@@ -1110,9 +1115,6 @@ impl petgraph::visit::Visitable for VirtualAddressGraph {
 }
 
 
-
-
-/*
 impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
     type Node = u64;
     type Edge = (u64, u64);
@@ -1183,7 +1185,6 @@ impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
     }
 
 }
-*/
 
 
 #[derive(Debug)]
@@ -1384,51 +1385,101 @@ fn main() {
     //      (5) calculates the order - hopefully use our previous method
     //      (6) inserts back the ordered list to the scc's ordered list in the appropriate place
 
-    
+
     // test dags 
-    let file = std::fs::File::open("dag.yaml").unwrap();
-    let dags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
+    let file = std::fs::File::open("cfg.yaml").unwrap();
+    let mut vags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
 
-    
+    /*
+    let mut test_vag = vags.iter_mut().find(|x| x.address() == 0x1845beec0).unwrap();
+    // let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/test_vag.dot").unwrap();
+    // test_vag.render_to(&mut f).unwrap();
+    // dot -Tsvg test_vag.dot > test_vag.svg
 
-    let mut better_cost: usize = 0;
+    test_vag.update_in_degrees();
 
-    for mut dag in dags {
-        dag.update_in_degrees();
+    println!("{:#x?}", test_vag);
 
-        let topsort = dag.weighted_order();
+    let topsort = test_vag.weighted_order();
+
+    let mut initial_order: Vec<u64> = Vec::new();
+        for node in test_vag.nodes() {
+            initial_order.push(node.address());
+        }
+    initial_order.sort();
+
+
+    println!("nodes originally: {}", initial_order.len());
+    println!("nodes after sort: {}", topsort.len());
+
+    for i in 0..initial_order.len() {
+        if i < topsort.len() {
+            println!("{:x}, {:x}", initial_order[i], topsort[i]);
+        } else {
+            println!("{:x}, ", initial_order[i]);
+        }
+    }
+
+    */
+
+    // let original_cost: usize = vag.cost_of_order(initial_order);
+    // let sorted_cost: usize = vag.cost_of_order(topsort);
+
+    // println!("cost of original order: {}", original_cost);
+    // println!("cost of topological sort: {} \n", sorted_cost);
+
+
+    for vag in vags {
+        // vag.update_in_degrees();
+
+        let topsort = vag.weighted_order();
 
         // let mut kahngraph: KahnGraph = KahnGraph::from_vag(&dag);
         // let topsort = kahngraph.kahn_algorithm();
 
         let mut initial_order: Vec<u64> = Vec::new();
-        for node in dag.nodes() {
+        for node in vag.nodes() {
             initial_order.push(node.address());
         }
         initial_order.sort();
 
-        println!("starting block's address: {:x}", dag.address());
+        println!("starting block's address: {:x}", vag.address());
 
+        println!("initial number of nodes {}", initial_order.len());
+        println!("ordered number of nodes {}", topsort.len());
+
+        for i in 0..initial_order.len() {
+            if i < topsort.len() {
+                println!("{:x}, {:x}", initial_order[i], topsort[i]);
+            } else {
+                println!("{:x}, ", initial_order[i]);
+            }
+        }
+
+        /*
         for i in 0..topsort.len() {
             println!("{:x}, {:x}", initial_order[i], topsort[i]);
         }
+        */
     
 
-        let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
+        // let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
 
         // println!("initial order: {:x?}", initial_order);
         // println!("topological sort: {:x?}", topsort);
 
-        let original_cost: usize = dag.cost_of_order(initial_order);
-        let sorted_cost: usize = dag.cost_of_order(topsort);
+        // let original_cost: usize = vag.cost_of_order(initial_order);
+        // let sorted_cost: usize = vag.cost_of_order(topsort);
 
-        println!("kendall tau: {:#?}", kendall_tau);
-        println!("cost of original order: {}", original_cost);
-        println!("cost of topological sort: {} \n", sorted_cost);
+        // println!("kendall tau: {:#?}", kendall_tau);
+        // println!("cost of original order: {}", original_cost);
+        // println!("cost of topological sort: {} \n", sorted_cost);
 
+        /*
         if sorted_cost <= original_cost {
             better_cost += 1;
         }
+        */
 
 
         // some addresses with big differences: 0x1800c17b0
@@ -1440,12 +1491,6 @@ fn main() {
         */
     }
 
-
-    println!("number of better cost cases: {}", better_cost);    
-
-
-
-    // let mut ordered: Vec<TestGraph> = Vec::new();
 
 }
 
@@ -1587,7 +1632,7 @@ impl<'a> Component<'a> {
         // for (s, t) in backs {
         //     println!("{} --> {}",s, t);
         // }
-        // vag.erease_edges(&backs);
+        // vag.erase_edges(&backs);
 
 
         
@@ -1598,10 +1643,11 @@ impl<'a> Component<'a> {
         vag.add_target_vertex(&outs);
 
         let backs = vag.backedges();
-        for (s, t) in &backs {
-            println!("{:x} --> {:x}",s, t);
-        }
-        vag.erease_edges(&backs);
+
+        vag.erase_edges(&backs);
+
+        // TODO: is it really needed?
+        vag.update_in_degrees();
 
         vag
 
@@ -2353,7 +2399,7 @@ fn h2(v: impl Eq) -> bool {
             let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
     
             let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
-            ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
+            ord_comp.retain(|&x| x != 0x0 && x != 0x1);
 
             ordered_components.push(ord_comp);
         }
