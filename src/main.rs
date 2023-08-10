@@ -48,8 +48,10 @@
 #![feature(impl_trait_in_assoc_type)]
 
 use goblin::elf::*;
+use petgraph::algo::is_cyclic_directed;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
+// use petgraph::algo::toposort;
 use petgraph::visit::*;
 // use std::collections::HashMap;
 use std::fs::File;
@@ -65,6 +67,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 // use std::collections::HashMap;
 use std::collections::BinaryHeap;
+// use std::collections::VecDeque;
 
 use std::cmp::*;
 
@@ -583,8 +586,14 @@ impl NoInstrBasicBlock {
     }
 
     // TODO: error handling
+    // TODO: tell rust there won't be an overflow
     fn erease_target(&mut self, target: u64) {
-        self.targets.retain(|&x| x != target);
+        if let Some(pos) = self.targets().iter().position(|x| x == &target) {
+            self.targets.remove(pos);
+            if self.indegree > 0 {
+                self.indegree = self.indegree - 1;
+            }
+        }
     }
 
     fn indegree(&self) -> usize {
@@ -711,13 +720,14 @@ impl VirtualAddressGraph {
         // TODO: error handling
 
         // VAG is ordered by addresses
-        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
-        // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
+        // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &self.nodes()[pos]
     }
 
     fn node_at_target_mut(&mut self, target: u64) -> &mut NoInstrBasicBlock {
-        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &mut self.nodes_mut()[pos]
     }
 
@@ -834,6 +844,7 @@ impl VirtualAddressGraph {
 
 
 
+
     // collection of such edges that generates cycles in the component
     // TODO: error handling - no backedges when graph is acyclic
     fn backedges(&self) -> Vec<(u64, u64)> {
@@ -886,12 +897,11 @@ impl VirtualAddressGraph {
 
     // given the list of incoming edges: merge their sources into one new vertex
     fn add_source_vertex(&mut self, in_edges: &Vec<(u64, u64)>) {
-        // delete the original incoming edges collected in in_edges
-        self.erease_edges(in_edges);
+        // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
         // the sources of these edges then are merged into one vertex
         // with small address and large length
-        self.nodes_mut().to_vec().push(
+        self.add_block(
             NoInstrBasicBlock {
                 address: 0x0,
                 len: 9999,
@@ -914,19 +924,19 @@ impl VirtualAddressGraph {
 
         // the targets of these edges then are merged into one vertex
         // with large address and small length
-        self.nodes_mut().to_vec().push(
+        self.add_block(
             NoInstrBasicBlock {
-                address: 0xffffffff,
+                address: 0xfffffffe,
                 len: 0,
                 targets: vec![],
-                indegree: 0,
+                indegree: out_edges.len(),
             }
         );
 
         // the new outgoing edges will have this new vertex as target
         let mut new_outgoing: Vec<(u64,u64)> = Vec::new();
         for (source, _target) in out_edges {
-            new_outgoing.push( (*source, 0xffffffff) );
+            new_outgoing.push( (*source, 0xfffffffe) );
         }
 
         // add these newly generated edges
@@ -938,17 +948,86 @@ impl VirtualAddressGraph {
     }
 
 
+    // add a new node to the existing list of nodes
+    fn add_block(&mut self, node: NoInstrBasicBlock) {
 
+        self.nodes.push(node);
+        self.nodes_mut().sort_by_key(|x| x.address());
 
     }
 
 
+    // gets a VAG and returns the "optimal" order of its vertices
+    fn weighted_order(&self) -> Vec<u64> {
+        
+        // TODO: is_cyclic_directed is recursive - maybe use topsort, but that seems redundant
+        if !(is_cyclic_directed(self)) {
+            // Kahn's algorithm
+            let mut kahngraph: KahnGraph = KahnGraph::from_vag(self);
+            let mut topsort = kahngraph.kahn_algorithm();   
 
-    // add phantom start
-    // add phantom end
+            topsort
 
-    // TBC ...
+        } else {
+            // collapse the strongly connected components into single vertices
+            let condensed = self.condense();
 
+            // Kahn's algorithm for the condensed graph
+            let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+            let mut topsort_condensed = kahngraph.kahn_algorithm();
+
+            // Kahn's algorithm for the strongly connected components
+            let components: Vec<Component> = Component::from_vag(self);
+            // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
+            let mut ordered_components: Vec<Vec<u64>> = Vec::new();
+
+            for comp in components {
+                // if the component is trivial (i.e. single vertex) -> do nothing
+                if !comp.trivial() {
+                    // break the cycles and add auxiliary source and target nodes
+                    let comp_vag = comp.to_acyclic_vag();
+
+                    // Kahn's algorithm for the given component
+                    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
+                    let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
+
+                    // delete the auxiliary nodes from the order
+                    ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
+
+                    ordered_components.push(ord_comp);
+                }
+            }
+
+            // println!("{:#x?}", topsort_condensed);
+            // println!("{:#x?}", ordered_components);
+
+            // insert the inside orders of the components in the ordered components list
+            let mut topsort: Vec<u64> = Vec::new();
+
+            while let Some(id) = topsort_condensed.pop() {
+                match ordered_components
+                        .iter()
+                        .position(|x| x.contains(&id)) {
+                    Some(pos) => {
+                        let mut component = ordered_components.remove(pos);
+                        while let Some(node) = component.pop() {
+                            topsort.push(node);
+                        }
+                    }
+                    None => {
+                        topsort.push(id);
+                    }
+                }
+            }
+
+            // due to the pop()s, the order is reversed
+            topsort.reverse();
+    
+            // println!("{:#x?}", topsort)
+
+            topsort
+        }
+    }
 
     // from graph to .dot
     /*
@@ -956,6 +1035,13 @@ impl VirtualAddressGraph {
         dot2::render(self, output)
     }
     */
+
+    }
+
+
+
+
+    
 
 
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
@@ -1283,31 +1369,68 @@ fn main() {
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
-    // println!("{:#x?}", vag);
-    
-    
-    let components: Vec<Component> = Component::from_vag(&vag);
+
+    let topsort = vag.weighted_order();
+    println!("{:x?}", topsort);
 
     /*
+
+    let condensed = vag.condense();
+
+    // Kahn's algorithm
+    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+    let mut topsort_condensed = kahngraph.kahn_algorithm();
+
+
+
+    let components: Vec<Component> = Component::from_vag(&vag);
+    let mut ordered_components: Vec<Vec<u64>> = Vec::new();
+
+
+
     for comp in components {
-        let incoming = comp.incoming_edges();
-        let outgoing = comp.outgoing_edges();
-        println!("incoming edges:");
-        for (source, target) in incoming {
-            println!("{:x} --> {:x}", source, target);
-        }
-        println!("nodes:");
-        for node in comp.nodes() {
-            println!("{:x}", node);
-        }
-        println!("outgoing edges:");
-        for (source, target)in outgoing {
-            println!("{:x} --> {:x}", source, target);
+        if !comp.trivial() {
+            // println!("{:#x?}", comp);
+            let comp_vag = comp.to_acyclic_vag();
+            let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
+    
+            let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
+            ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
+
+            ordered_components.push(ord_comp);
         }
     }
-    */
-    
 
+    println!("{:#x?}", topsort_condensed);
+    println!("{:#x?}", ordered_components);
+
+    let mut topsort: Vec<u64> = Vec::new();
+
+    while let Some(id) = topsort_condensed.pop() {
+        match ordered_components
+                .iter()
+                .position(|x| x.contains(&id)) {
+            Some(pos) => {
+                let mut component = ordered_components.remove(pos);
+                while let Some(node) = component.pop() {
+                    topsort.push(node);
+                }
+            }
+            None => {
+                topsort.push(id);
+            }
+        }
+    }
+
+    topsort.reverse();
+    
+    println!("{:#x?}", topsort);
+
+    */
+
+    
+    
+    /*
     // let scc = tarjan_scc(&vag);
     // println!("{:#x?}", scc);
 
@@ -1339,7 +1462,7 @@ fn main() {
     println!("cost of original order: {}", condensed.cost_of_order(initial_order));
     println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
 
-
+    */
 
     // WHAT DO WE NEED FOR CYCLE BREAKING?
     //      (0) a Components struct: reference for the original VAG, Hash set of subgraph node ids
@@ -1527,23 +1650,50 @@ impl<'a> Component<'a> {
 
     }
 
-    // TODO: make this better, that is no copying blocks !!!
-    // maybe we should have not a VirtualAddressGraph, just a vector of &NoInstrBasicBlock references
-    fn to_vag(&self) -> VirtualAddressGraph {
+    // from a Component it generates a VirtualAddressGraph, where
+    // the sources of the incoming edges are merged into one vertex
+    // the targets of the outgoing edges are merged into one vertex
+    // MAYBE: create an enum that sets if acyclic or not
+    fn to_acyclic_vag(&self) -> VirtualAddressGraph {
 
         let address = self.nodes().iter().min().unwrap();
 
         let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
         for node in self.nodes() {
+            // TODO: do this without clone()
+            // MAYBE: rewrite the whole Kahn's algorithm to accept avoided edges, vertices, etc.
             nodes.push(self.whole().node_at_target(*node).clone());
         }
 
-        VirtualAddressGraph { 
+        let mut vag: VirtualAddressGraph = VirtualAddressGraph { 
             address: *address, 
             nodes: nodes,
+        };
+
+        // let backs = vag.backedges();
+        // for (s, t) in backs {
+        //     println!("{} --> {}",s, t);
+        // }
+        // vag.erease_edges(&backs);
+
+
+        
+        let ins: Vec<(u64, u64)> = self.incoming_edges();
+        let outs: Vec<(u64, u64)> = self.outgoing_edges();
+
+        vag.add_source_vertex(&ins);
+        vag.add_target_vertex(&outs);
+
+        let backs = vag.backedges();
+        for (s, t) in &backs {
+            println!("{:x} --> {:x}",s, t);
         }
+        vag.erease_edges(&backs);
+
+        vag
 
     }
+
 
     
 
@@ -1711,15 +1861,6 @@ println!("{:#x?}", dominators);
 
 
 
-/*
-fn h<V: Eq>(v: V) -> impl Eq{
-    v == v
-}
-
-fn h2(v: impl Eq) -> bool {
-    v == v
-}
-*/
 
 
 
@@ -2248,6 +2389,34 @@ impl Component {
 
  */
 
+/*
+    for comp in components {
+        let incoming = comp.incoming_edges();
+        let outgoing = comp.outgoing_edges();
+        println!("incoming edges:");
+        for (source, target) in incoming {
+            println!("{:x} --> {:x}", source, target);
+        }
+        println!("nodes:");
+        for node in comp.nodes() {
+            println!("{:x}", node);
+        }
+        println!("outgoing edges:");
+        for (source, target)in outgoing {
+            println!("{:x} --> {:x}", source, target);
+        }
+    }
+*/
+
+/*
+fn h<V: Eq>(v: V) -> impl Eq{
+    v == v
+}
+
+fn h2(v: impl Eq) -> bool {
+    v == v
+}
+*/
 
 
 
