@@ -286,7 +286,7 @@ impl VirtualAddressGraph {
     }
 
 
-    fn cost_of_order(&self, order: Vec<u64>) -> usize {
+    pub fn cost_of_order(&self, order: Vec<u64>) -> usize {
 
         // the list of nodes in the given order
         let mut ordered: Vec<&NoInstrBasicBlock> = Vec::new();

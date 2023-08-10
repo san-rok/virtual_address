@@ -35,7 +35,7 @@ use crate::vagraph::vag::*;
 
 // use serde::{Serialize, Deserialize};
 
-// use kendalls::tau_b;
+use kendalls::tau_b;
 
 
 
@@ -285,6 +285,7 @@ fn main() {
     // println!("cost of original order: {}", original_cost);
     // println!("cost of topological sort: {} \n", sorted_cost);
 
+    let mut better_cost = 0;
 
     for vag in vags {
         // vag.update_in_degrees();
@@ -302,8 +303,8 @@ fn main() {
 
         println!("starting block's address: {:x}", vag.address());
 
-        println!("initial number of nodes {}", initial_order.len());
-        println!("ordered number of nodes {}", topsort.len());
+        // println!("initial number of nodes {}", initial_order.len());
+        // println!("ordered number of nodes {}", topsort.len());
 
         for i in 0..initial_order.len() {
             if i < topsort.len() {
@@ -320,23 +321,21 @@ fn main() {
         */
     
 
-        // let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
+        let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
 
         // println!("initial order: {:x?}", initial_order);
         // println!("topological sort: {:x?}", topsort);
 
-        // let original_cost: usize = vag.cost_of_order(initial_order);
-        // let sorted_cost: usize = vag.cost_of_order(topsort);
+        let original_cost: usize = vag.cost_of_order(initial_order);
+        let sorted_cost: usize = vag.cost_of_order(topsort);
 
-        // println!("kendall tau: {:#?}", kendall_tau);
-        // println!("cost of original order: {}", original_cost);
-        // println!("cost of topological sort: {} \n", sorted_cost);
+        println!("kendall tau: {:#?}", kendall_tau);
+        println!("cost of original order: {}", original_cost);
+        println!("cost of topological sort: {} \n", sorted_cost);
 
-        /*
         if sorted_cost <= original_cost {
             better_cost += 1;
         }
-        */
 
 
         // some addresses with big differences: 0x1800c17b0
@@ -347,6 +346,8 @@ fn main() {
         }
         */
     }
+
+    println!("number of times topsort is better: {}", better_cost);
 
 
 }
