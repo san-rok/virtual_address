@@ -2,7 +2,6 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, HashSet};
 
-
 use crate::cfg::*;
 use crate::vagraph::kahn::*;
 use crate::vagraph::scc::*;
@@ -15,23 +14,31 @@ use petgraph::visit::*;
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NoInstrBasicBlock {
+    // the virtual address of the block
     address: u64,
+    // the number of instructions in the block
     len: usize,
+    // the addresses of blocks where we will jump next 
+    // note: its length is at most two
     targets: Vec<u64>,
+    // number of blocks from we jump to here
     indegree: usize,
 }
 // if we consider the block alone, then its indegree is set to be 0
 
 impl NoInstrBasicBlock {
     
+    // returns the virtual address of the block
     pub fn address(&self) -> u64 {
         self.address
     }
 
+    // returns the number of instructions 
     pub fn len(&self) -> usize {
         self.len
     }
 
+    // returns 
     pub fn targets(&self) -> &[u64] {
         &self.targets
     }

@@ -24,13 +24,17 @@ impl<'a> KahnBasicBlock<'a> {
         self.block
     }
 
+    /*
     fn len(&self) -> usize {
         self.block.len()
     }
+    */
 
+    /*
     fn targets(&self) -> &'a [u64] {
         self.block.targets()
     }
+    */
 
     fn indegree(&self) -> usize {
         self.block.indegree()
@@ -80,10 +84,12 @@ impl<'a> KahnGraph<'a> {
 
     }
 
+    /*
     // returns the address of the KahnGraph (i.e. the starting va)
     fn address(&self) -> u64 {
         self.address
     }
+    */
 
     // returns the slice of KBBs of the KahnGraph
     fn nodes(&self) -> &[KahnBasicBlock<'a>] {
@@ -102,10 +108,12 @@ impl<'a> KahnGraph<'a> {
             .unwrap()
     }
 
+    /*
     fn node_at_target(&self, target: u64) -> &KahnBasicBlock<'a> {
         let pos = self.position(target);
         &self.nodes()[pos]
     }
+    */
 
     fn node_at_target_mut(&mut self, target: u64) -> &mut KahnBasicBlock<'a> {
         let pos = self.position(target);

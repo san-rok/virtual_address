@@ -33,9 +33,9 @@ use crate::vagraph::vag::*;
 
 // use std::cmp::*;
 
-use serde::{Serialize, Deserialize};
+// use serde::{Serialize, Deserialize};
 
-use kendalls::tau_b;
+// use kendalls::tau_b;
 
 
 
@@ -245,7 +245,7 @@ fn main() {
 
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
-    let mut vags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
+    let vags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
 
     /*
     let mut test_vag = vags.iter_mut().find(|x| x.address() == 0x1845beec0).unwrap();
