@@ -28,44 +28,52 @@ pub struct NoInstrBasicBlock {
 
 impl NoInstrBasicBlock {
     
-    // returns the virtual address of the block
+    // the virtual address of the block
     pub fn address(&self) -> u64 {
         self.address
     }
 
-    // returns the number of instructions 
+    // the number of instructions 
     pub fn len(&self) -> usize {
         self.len
     }
 
-    // returns 
+    // a slice of the target blocks' addresses
     pub fn targets(&self) -> &[u64] {
         &self.targets
     }
 
+    // extends the vector of targets by the given address
+    // note: we can not modify here the target's indegree !!!
     fn add_target(&mut self, target: u64) {
         self.targets.push(target);
     }
 
-    // TODO: error handling
-    // TODO: tell rust there won't be an overflow
+    // deletes the given target from the targets vector if it's there (yes it is)
+    // note: we can not modify here the target's indegree !!
     fn erase_target(&mut self, target: u64) {
         if let Some(pos) = self.targets().iter().position(|x| x == &target) {
             self.targets.remove(pos);
+            // as mentioned above: the indegree of the given block does NOT change
+            /*
             if self.indegree > 0 {
                 self.indegree = self.indegree - 1;
             }
+            */
         }
     }
 
+    // the indegree of the block
     pub fn indegree(&self) -> usize {
         self.indegree
     }
 
+    // setter for the indegree
     fn set_indegree(&mut self, indegree: usize) {
         self.indegree = indegree;
     }
 
+    // translates a BasicBlock to NIBB, that is counts the number of instructions
     fn from_bb(bb: &BasicBlock) -> Self {
 
         NoInstrBasicBlock { 
@@ -78,6 +86,8 @@ impl NoInstrBasicBlock {
     }
 
 }
+
+///////////////////// TRAITS for NoInstrBasicBlock /////////////////////////
 
 // equality of NIBB's whenever their addresses are the same
 impl PartialEq for NoInstrBasicBlock {
@@ -101,6 +111,8 @@ impl Ord for NoInstrBasicBlock {
             .then(self.len().cmp(&other.len()))
     }
 }
+
+//////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VirtualAddressGraph {
