@@ -1,50 +1,4 @@
 
-// https://github.com/m4b/goblin/blob/master/examples/lazy_parse.rs
-// goblin::ProgramHeader: https://refspecs.linuxfoundation.org/elf/gabi41.pdf (75 oldal)
-// https://en.wikipedia.org/wiki/Endianness
-// https://docs.rs/goblin/0.7.1/goblin/elf/struct.Elf.html#method.is_object_file
-
-// https://refspecs.linuxfoundation.org/elf/gabi4+/ch5.pheader.html
-// http://www.science.unitn.it/~fiorella/guidelinux/tlk/node62.html
-
-// BasibBlock def.: https://en.wikipedia.org/wiki/Basic_block
-
-// git + github:
-// https://datacamp.com/tutorial/git-push-pullThe%20function%20end_address%20implemented%20for%20BasicBlock%20struct.
-// https://training.github.com/downloads/github-git-cheat-sheet/
-
-
-// smt solver
-// pgo - pref
-// break griffin/th
-
-// "rop"-olni
-
-// aida 
-
-// simba vs gamba
-
-// p_offset - a file kezdetétől nézve hol található az adott program
-// p_vaddr - az adott program kedzeti virtual address-eSándor Rokob
-
-// r2 -> V (nagy v): itt van az amit vissza akarunk írni;
-// note: hexadecimal: 1 byte = 2 karakter
-
-// https://man7.org/linux/man-pages/man5/elf.5.html
-
-// ripr - formatter
-// note: indirect branch - long enum; return, interrupt, exception - no address;
-
-
-// dominator graph - control flow graph
-
-// multi-thread: locks adn dead-locks
-
-
-// dot -Tsvg virtual_address.dot > virtual_address.svg
-
-// crates
-
 #![feature(impl_trait_in_assoc_type)]
 
 // PART01: Binary struct
@@ -52,28 +6,19 @@
 pub mod binary;
 use crate::binary::*;
 
-// PART02 + PART03.A Basic Blocks & Control Flow Graph
+// PART02 + PART03.A: Basic Blocks & Control Flow Graph
 
 pub mod cfg;
 use crate::cfg::*;
 
+// PART03.B: "Optimal" list of basic blocks
 
 
-// use goblin::elf::*;
 use petgraph::algo::is_cyclic_directed;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
 // use petgraph::algo::toposort;
 use petgraph::visit::*;
-// use std::collections::HashMap;
-// use std::fs::File;
-// use std::io::Read;
-// use std::ops::Range;
-// use std::ops::*;
-
-// use std::fmt;
-
-// use iced_x86::*;
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
