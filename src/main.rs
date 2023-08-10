@@ -1373,96 +1373,6 @@ fn main() {
     let topsort = vag.weighted_order();
     println!("{:x?}", topsort);
 
-    /*
-
-    let condensed = vag.condense();
-
-    // Kahn's algorithm
-    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
-    let mut topsort_condensed = kahngraph.kahn_algorithm();
-
-
-
-    let components: Vec<Component> = Component::from_vag(&vag);
-    let mut ordered_components: Vec<Vec<u64>> = Vec::new();
-
-
-
-    for comp in components {
-        if !comp.trivial() {
-            // println!("{:#x?}", comp);
-            let comp_vag = comp.to_acyclic_vag();
-            let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
-    
-            let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
-            ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
-
-            ordered_components.push(ord_comp);
-        }
-    }
-
-    println!("{:#x?}", topsort_condensed);
-    println!("{:#x?}", ordered_components);
-
-    let mut topsort: Vec<u64> = Vec::new();
-
-    while let Some(id) = topsort_condensed.pop() {
-        match ordered_components
-                .iter()
-                .position(|x| x.contains(&id)) {
-            Some(pos) => {
-                let mut component = ordered_components.remove(pos);
-                while let Some(node) = component.pop() {
-                    topsort.push(node);
-                }
-            }
-            None => {
-                topsort.push(id);
-            }
-        }
-    }
-
-    topsort.reverse();
-    
-    println!("{:#x?}", topsort);
-
-    */
-
-    
-    
-    /*
-    // let scc = tarjan_scc(&vag);
-    // println!("{:#x?}", scc);
-
-
-    let condensed = vag.condense();
-    // println!("{:#x?}", condensed);
-
-    // Kahn's algorithm
-    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
-
-    // println!("{:#x?}", kahngraph);
-
-    let mut initial_order: Vec<u64> = Vec::new();
-        for node in kahngraph.nodes() {
-            initial_order.push(node.address());
-        }
-    initial_order.sort();
-
-    let topsort = kahngraph.kahn_algorithm();
-    println!("starting block's address: {:x}", kahngraph.address());
-
-    for i in 0..topsort.len() {
-        println!("{:x}, {:x}", initial_order[i], topsort[i]);
-    }
-
-    let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
-    println!("kendall tau: {:#?} \n", kendall_tau);
-
-    println!("cost of original order: {}", condensed.cost_of_order(initial_order));
-    println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
-
-    */
 
     // WHAT DO WE NEED FOR CYCLE BREAKING?
     //      (0) a Components struct: reference for the original VAG, Hash set of subgraph node ids
@@ -1474,7 +1384,7 @@ fn main() {
     //      (5) calculates the order - hopefully use our previous method
     //      (6) inserts back the ordered list to the scc's ordered list in the appropriate place
 
-    /*
+    
     // test dags 
     let file = std::fs::File::open("dag.yaml").unwrap();
     let dags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
@@ -1486,16 +1396,18 @@ fn main() {
     for mut dag in dags {
         dag.update_in_degrees();
 
-        let mut kahngraph: KahnGraph = KahnGraph::from_vag(&dag);
-        let topsort = kahngraph.kahn_algorithm();
+        let topsort = dag.weighted_order();
+
+        // let mut kahngraph: KahnGraph = KahnGraph::from_vag(&dag);
+        // let topsort = kahngraph.kahn_algorithm();
 
         let mut initial_order: Vec<u64> = Vec::new();
-        for node in kahngraph.nodes() {
+        for node in dag.nodes() {
             initial_order.push(node.address());
         }
         initial_order.sort();
 
-        println!("starting block's address: {:x}", kahngraph.address());
+        println!("starting block's address: {:x}", dag.address());
 
         for i in 0..topsort.len() {
             println!("{:x}, {:x}", initial_order[i], topsort[i]);
@@ -1520,16 +1432,17 @@ fn main() {
 
 
         // some addresses with big differences: 0x1800c17b0
+        /*
         if dag.address() == 0x1800c1530 {
             let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
             dag.render_to(&mut file).unwrap();
         }
+        */
     }
 
 
     println!("number of better cost cases: {}", better_cost);    
 
-    */
 
 
     // let mut ordered: Vec<TestGraph> = Vec::new();
@@ -2417,6 +2330,98 @@ fn h2(v: impl Eq) -> bool {
     v == v
 }
 */
+
+/*
+
+    let condensed = vag.condense();
+
+    // Kahn's algorithm
+    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+    let mut topsort_condensed = kahngraph.kahn_algorithm();
+
+
+
+    let components: Vec<Component> = Component::from_vag(&vag);
+    let mut ordered_components: Vec<Vec<u64>> = Vec::new();
+
+
+
+    for comp in components {
+        if !comp.trivial() {
+            // println!("{:#x?}", comp);
+            let comp_vag = comp.to_acyclic_vag();
+            let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
+    
+            let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
+            ord_comp.retain(|&x| x != 0x0 && x != 0xfffffffe);
+
+            ordered_components.push(ord_comp);
+        }
+    }
+
+    println!("{:#x?}", topsort_condensed);
+    println!("{:#x?}", ordered_components);
+
+    let mut topsort: Vec<u64> = Vec::new();
+
+    while let Some(id) = topsort_condensed.pop() {
+        match ordered_components
+                .iter()
+                .position(|x| x.contains(&id)) {
+            Some(pos) => {
+                let mut component = ordered_components.remove(pos);
+                while let Some(node) = component.pop() {
+                    topsort.push(node);
+                }
+            }
+            None => {
+                topsort.push(id);
+            }
+        }
+    }
+
+    topsort.reverse();
+    
+    println!("{:#x?}", topsort);
+
+*/
+
+/*
+    // let scc = tarjan_scc(&vag);
+    // println!("{:#x?}", scc);
+
+
+    let condensed = vag.condense();
+    // println!("{:#x?}", condensed);
+
+    // Kahn's algorithm
+    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+
+    // println!("{:#x?}", kahngraph);
+
+    let mut initial_order: Vec<u64> = Vec::new();
+        for node in kahngraph.nodes() {
+            initial_order.push(node.address());
+        }
+    initial_order.sort();
+
+    let topsort = kahngraph.kahn_algorithm();
+    println!("starting block's address: {:x}", kahngraph.address());
+
+    for i in 0..topsort.len() {
+        println!("{:x}, {:x}", initial_order[i], topsort[i]);
+    }
+
+    let kendall_tau = tau_b(&initial_order, &topsort).unwrap().0;
+    println!("kendall tau: {:#?} \n", kendall_tau);
+
+    println!("cost of original order: {}", condensed.cost_of_order(initial_order));
+    println!("cost of topological sort: {}", condensed.cost_of_order(topsort));
+
+*/
+
+
+
 
 
 
