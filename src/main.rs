@@ -47,17 +47,20 @@
 
 #![feature(impl_trait_in_assoc_type)]
 
-use goblin::elf::*;
+pub mod binary;
+use crate::binary::*;
+
+// use goblin::elf::*;
 use petgraph::algo::is_cyclic_directed;
 // use petgraph::algo::dominators::*;
 use petgraph::algo::tarjan_scc;
 // use petgraph::algo::toposort;
 use petgraph::visit::*;
 // use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
+// use std::fs::File;
+// use std::io::Read;
 // use std::ops::Range;
-use std::ops::*;
+// use std::ops::*;
 
 use std::fmt;
 
@@ -77,6 +80,7 @@ use kendalls::tau_b;
 
 // PART 01: Binary struct
 
+/*
 struct Binary {
     program_header: Vec<ProgramHeader>,
     bytes: Vec<u8>,
@@ -149,6 +153,7 @@ impl Binary {
     
 }
 
+*/
 
 // PART 02: Basic block
 
