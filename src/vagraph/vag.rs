@@ -114,6 +114,7 @@ impl Ord for NoInstrBasicBlock {
 
 //////////////////////////////////////////////////////////////////////////////////
 
+// almost the same as ControlFlowGraph but with NoInstrBasicBlock structs
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VirtualAddressGraph {
     address: u64,
@@ -123,6 +124,7 @@ pub struct VirtualAddressGraph {
 impl VirtualAddressGraph {
 
     // creates a new instance given its address and blocks
+    // need: keep the fields private from scc
     pub fn new(address: u64, nodes: Vec<NoInstrBasicBlock>) -> Self {
         VirtualAddressGraph { 
             address: address, 
@@ -130,23 +132,17 @@ impl VirtualAddressGraph {
         }
     }
 
-
-    // returns the list of indegrees of an instance
-    // sorted by keys!
+    // returns the list (BTreeMap - sorted by address) of indegrees of an instance
     fn in_degrees(&self) -> BTreeMap<u64, usize> {
 
-        // with_capacity(...) ?
         let mut indeg: BTreeMap<u64, usize> = BTreeMap::new();
         
         for node in self.nodes() {
-
             indeg.entry(node.address()).or_insert(0);
 
             for target in node.targets() {
                 indeg.entry(*target).and_modify(|counter| *counter += 1).or_insert(1);
-
             }
-
         }
         
         indeg
@@ -155,6 +151,8 @@ impl VirtualAddressGraph {
     // an extra iteration through the nodes of the graph to update the indegrees of the vertices
     // maybe there is a more clever/effective way to do this - where one can use the iteration in
     // from_cfg() method to get the indegrees
+    // note: whenever we modify the VAG instance we need to update the indegrees
+    // MAYBE: store the nodes in a BTreeMap (ordered by what?);
     pub fn update_in_degrees(&mut self) {
         let indeg = self.in_degrees();
 
@@ -163,6 +161,7 @@ impl VirtualAddressGraph {
         }
     }
 
+    // creates an instance from a ControlFlowGraph
     pub fn from_cfg(cfg: &ControlFlowGraph) -> Self {
         let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
 
@@ -186,35 +185,40 @@ impl VirtualAddressGraph {
 
     }
 
+    // the start virtual address
     pub fn address(&self) -> u64 {
         self.address
     }
 
+    // unmutable slice of nodes
     pub fn nodes(&self) -> &[NoInstrBasicBlock] {
         &self.nodes
     }
 
+    // mutable slice of nodes
     fn nodes_mut(&mut self) -> &mut [NoInstrBasicBlock] {
         &mut self.nodes
     }
 
     // reference to a node with a given address
+    // TODO: error handling
     pub fn node_at_target(&self, target: u64) -> &NoInstrBasicBlock {
-        // TODO: error handling
-
         // VAG is ordered by addresses
         // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
         let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &self.nodes()[pos]
     }
 
+    // mutable reference to a node with a given address
     fn node_at_target_mut(&mut self, target: u64) -> &mut NoInstrBasicBlock {
         // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
         let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &mut self.nodes_mut()[pos]
     }
 
-    // generates the condensed vag - using petgraph::algo::tarjan_scc
+    // generates the condensed vag - using Tarjan's algorithm
+    // TODO: in the scc module there is a method generating components (basicly does
+    // the same as the first part of this) -> MERGE THEM!
     fn condense(&self) -> Self {
         
         // tarjan_scc returns reversed topological order
@@ -284,6 +288,7 @@ impl VirtualAddressGraph {
 
     fn cost_of_order(&self, order: Vec<u64>) -> usize {
 
+        // the list of nodes in the given order
         let mut ordered: Vec<&NoInstrBasicBlock> = Vec::new();
         let mut cost: usize = 0;
 
@@ -297,27 +302,25 @@ impl VirtualAddressGraph {
 
         let mut pos01 = 0;
         for block in &ordered {
-            /*
-            let pos01: usize = order
-                .iter()
-                .position(|x| x == block.address());
-            */
             for target in block.targets() {
                 let mut edge_weight: usize = 0;
-
+                
+                // the given order can be any arbitrary order
                 let pos02: usize = order
                     .iter()
                     .position(|x| x == target)
                     .unwrap();
 
-                for node in &ordered[min(pos01, pos02)+1 .. max(pos01, pos02)] {
+                // loops would result in invalid range
+                if pos01 != pos02 {
+                    for node in &ordered[min(pos01, pos02)+1 .. max(pos01, pos02)] {
                         edge_weight += node.len();
+                    }
                 }
 
                 cost = cost + edge_weight;
 
             }
-
 
             pos01 += 1;
         }
@@ -345,14 +348,14 @@ impl VirtualAddressGraph {
 
 
     // add the given edge to the VAG
+    // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edge(&mut self, edge: (u64, u64)) {
-
         self.node_at_target_mut(edge.0).add_target(edge.1);
-
     }
 
     // add the given edges to the VAG
-    // the edges vec<(u64, u64)> needs to be ordered
+    // note: the edges vec<(u64, u64)> needs to be ordered
+    // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edges(&mut self, edges: &Vec<(u64,u64)>) {
 
         // TODO: optimalize !!
@@ -518,9 +521,11 @@ impl VirtualAddressGraph {
     }
 
     // from graph to .dot
+    /*
     fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
+    */
 
 
 
@@ -530,7 +535,10 @@ impl VirtualAddressGraph {
 
 
     
+/////////////////////// TRAITS for VirtualAddressGraph //////////////////////////
 
+// package: petgraph
+// for graph algorithms and traversal
 
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
 // NOTE: there is a topologiccal sort in petgraph - but it is DFS based
@@ -564,7 +572,6 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph {
     }
 }
 
-
 impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
     fn node_bound(self: &Self) -> usize {
@@ -597,6 +604,10 @@ impl petgraph::visit::Visitable for VirtualAddressGraph {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+
+// package: dots
+// for .dot and hence .svg plot
 
 impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
     type Node = u64;
@@ -668,3 +679,6 @@ impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
     }
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////
