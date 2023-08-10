@@ -1,9 +1,11 @@
 
 use std::cmp::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 
 use crate::cfg::*;
+use crate::vagraph::kahn::*;
+use crate::vagraph::scc::*;
 
 use serde::{Serialize, Deserialize};
 
@@ -100,6 +102,15 @@ pub struct VirtualAddressGraph {
 }
 
 impl VirtualAddressGraph {
+
+    // creates a new instance given its address and blocks
+    pub fn new(address: u64, nodes: Vec<NoInstrBasicBlock>) -> Self {
+        VirtualAddressGraph { 
+            address: address, 
+            nodes: nodes,
+        }
+    }
+
 
     // returns the list of indegrees of an instance
     // sorted by keys!

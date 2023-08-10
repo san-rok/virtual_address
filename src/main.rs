@@ -40,7 +40,7 @@ use kendalls::tau_b;
 
 
 
-
+/*
 
 #[derive(Debug)]
 struct KahnBasicBlock<'a> {
@@ -208,6 +208,8 @@ impl<'a> KahnGraph<'a> {
 }
 
 
+*/
+
 fn main() {
 
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
@@ -349,6 +351,10 @@ fn main() {
 
 }
 
+
+// Component struct
+
+/*
 
 #[derive(Debug)]
 struct Component<'a> {
@@ -515,6 +521,8 @@ impl<'a> Component<'a> {
 
 }
 
+
+*/
 
 
 
