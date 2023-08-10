@@ -884,6 +884,58 @@ impl VirtualAddressGraph {
 
     }
 
+    // given the list of incoming edges: merge their sources into one new vertex
+    fn add_source_vertex(&mut self, in_edges: &Vec<(u64, u64)>) {
+        // delete the original incoming edges collected in in_edges
+        self.erease_edges(in_edges);
+
+        // the sources of these edges then are merged into one vertex
+        // with small address and large length
+        self.nodes_mut().to_vec().push(
+            NoInstrBasicBlock {
+                address: 0x0,
+                len: 9999,
+                targets: in_edges.iter().map(|(s,t)| *t).collect(),
+                indegree: 0,
+            }
+        );
+
+        // the nodes in VAG are sorted by the address
+        self.nodes_mut().sort_by_key(|x| x.address());
+
+    }
+
+
+    // given the list of outgoing edges: merge their targets into one new vertex
+    fn add_target_vertex(&mut self, out_edges: &Vec<(u64, u64)>) {
+
+        // delete the original outgoing edges
+        self.erease_edges(out_edges);
+
+        // the targets of these edges then are merged into one vertex
+        // with large address and small length
+        self.nodes_mut().to_vec().push(
+            NoInstrBasicBlock {
+                address: 0xffffffff,
+                len: 0,
+                targets: vec![],
+                indegree: 0,
+            }
+        );
+
+        // the new outgoing edges will have this new vertex as target
+        let mut new_outgoing: Vec<(u64,u64)> = Vec::new();
+        for (source, _target) in out_edges {
+            new_outgoing.push( (*source, 0xffffffff) );
+        }
+
+        // add these newly generated edges
+        self.add_edges(&new_outgoing);
+
+        // the nodes in VAG are sorted by the address
+        self.nodes_mut().sort_by_key(|x| x.address());        
+
+    }
 
 
 
