@@ -30,16 +30,14 @@ fn main() {
 
     let cfg: ControlFlowGraph = ControlFlowGraph::from_address(&binary, virtual_address);
 
-    // let dominators = simple_fast(&cfg, virtual_address);
-
     let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/virtual_address.dot").unwrap();
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
     let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
 
-    let topsort = vag.weighted_order();
-    println!("{:x?}", topsort);
+    let _topsort = vag.weighted_order();
+    // println!("{:x?}", topsort);
 
 
     
@@ -89,8 +87,8 @@ fn main() {
 
     let mut better_cost = 0;
 
-    for vag in vags {
-        // vag.update_in_degrees();
+    for mut vag in vags {
+        vag.update_in_degrees();
 
         let topsort = vag.weighted_order();
 
