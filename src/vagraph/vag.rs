@@ -11,6 +11,10 @@ use serde::{Serialize, Deserialize};
 use petgraph::algo::{is_cyclic_directed, tarjan_scc};
 use petgraph::visit::*;
 
+// test
+// type NodeId = u64;
+
+
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NoInstrBasicBlock {
@@ -27,6 +31,15 @@ pub struct NoInstrBasicBlock {
 // if we consider the block alone, then its indegree is set to be 0
 
 impl NoInstrBasicBlock {
+
+    pub fn new(address: u64, len: usize, targets: Vec<u64>, indegree: usize) -> Self {
+        NoInstrBasicBlock { 
+            address, 
+            len,
+            targets,
+            indegree,
+        }
+    }
     
     // the virtual address of the block
     pub fn address(&self) -> u64 {
