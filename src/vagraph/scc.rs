@@ -149,7 +149,7 @@ impl<'a> Component<'a> {
 
         vag.erase_edges(&backs);
 
-        // TODO: update the indegrees at the plae of modification!!
+        // TODO: update the indegrees at the place of modification!!
         vag.update_in_degrees();
 
         vag

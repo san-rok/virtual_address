@@ -73,6 +73,22 @@ impl NoInstrBasicBlock {
         self.indegree = indegree;
     }
 
+    // increase the indegree of the block by 1
+    fn increase_indegree(&mut self) {
+        self.set_indegree(self.indegree + 1);
+    }
+
+    /*
+    // decrease the indegree of the block by 1
+    // if indegree == 0, then to nothing
+    fn decrease_indegree(&mut self) {
+        if self.indegree() > 0 {
+            self.set_indegree(self.indegree - 1);
+        }
+    }
+    */
+
+
     // translates a BasicBlock to NIBB, that is counts the number of instructions
     fn from_bb(bb: &BasicBlock) -> Self {
 
@@ -352,24 +368,34 @@ impl VirtualAddressGraph {
 
 
     // add a new node to the existing list of nodes
+    // note: the way we use this - no indegree modification is needed for the targets
     fn add_block(&mut self, node: NoInstrBasicBlock) {
 
+        // the new edges modify the indegrees of the targets
+        /*
+        for target in node.targets() {
+            self.node_at_target_mut(*target).increase_indegree();
+        }
+        */
+
+        // add the new node to the graph
         self.nodes.push(node);
+
         // the nodes are sorted by address
         self.nodes_mut().sort_by_key(|x| x.address());
-
     }
 
 
     // add the given edge to the VAG: between EXISTING blocks
-    // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edge(&mut self, edge: (u64, u64)) {
         self.node_at_target_mut(edge.0).add_target(edge.1);
+
+        // increase the indegree of the target block
+        self.node_at_target_mut(edge.1).increase_indegree();
     }
 
     // add the given edges to the VAG
     // note: the edges vec<(u64, u64)> needs to be ordered
-    // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edges(&mut self, edges: &Vec<(u64,u64)>) {
         // TODO: optimalize !!
         for &edge in edges {
@@ -378,12 +404,15 @@ impl VirtualAddressGraph {
     }
 
     // erase the given edge from the VAG
-    // note: used only when phantom target is added to the graph hence the indegree update is there
+    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
+    //       in add_target_vertex() method, hence no indegree modification is necessary
     fn erase_edge(&mut self, edge: (u64, u64)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
 
     // erase the given edges to the VAG
+    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
+    //       in add_target_vertex() method, hence no indegree modification is necessary
     // note: used only when phantom target is added to the graph hence the indegree update is there
     pub fn erase_edges(&mut self, edges: &Vec<(u64, u64)>)  {
         // TODO: optimalize !!
@@ -393,7 +422,6 @@ impl VirtualAddressGraph {
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
-    // note: used only in scc::to_acyclic_vag hence the indegree update is there
     pub fn add_source_vertex(&mut self, in_edges: &[(u64, u64)]) {
         // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
@@ -411,6 +439,9 @@ impl VirtualAddressGraph {
         // the nodes in VAG are sorted by the address
         self.nodes_mut().sort_by_key(|x| x.address());
 
+        // the edges coming from the new vertex increases the indegrees of some of the already existing vertices
+        self.update_in_degrees();
+
     }
 
 
@@ -418,7 +449,7 @@ impl VirtualAddressGraph {
     // note: used only in scc::to_acyclic_vag hence the indegree update is there
     pub fn add_target_vertex(&mut self, out_edges: &Vec<(u64, u64)>) {
 
-        // delete the original outgoing edges
+        // delete the original outgoing edges, which points to non-existing vertices
         self.erase_edges(out_edges);
 
         // the targets of these edges then are merged into one vertex
@@ -428,7 +459,9 @@ impl VirtualAddressGraph {
                 address: 0x1,
                 len: 0,
                 targets: vec![],
-                indegree: out_edges.len(),
+                // at the moment no incoming edges declared
+                indegree: 0,
+                //out_edges.len(),
             }
         );
 
@@ -439,6 +472,7 @@ impl VirtualAddressGraph {
         }
 
         // add these newly generated edges
+        // note: add_edges() updates the indegree of this new vertex: 0x1
         self.add_edges(&new_outgoing);
 
         // the nodes in VAG are sorted by the address
