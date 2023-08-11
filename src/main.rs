@@ -18,6 +18,7 @@ use crate::vagraph::vag::*;
 
 
 use kendalls::tau_b;
+use petgraph::visit::IntoNodeIdentifiers;
 
 
 fn main() {
@@ -152,3 +153,36 @@ fn main() {
 
 }
 
+
+
+// generic functions
+
+
+
+fn to_vag<G>(g: G) -> VirtualAddressGraph 
+    where
+        G:  petgraph::visit::IntoNodeIdentifiers<NodeId = u64, EdgeId = (u64, u64)> +
+            petgraph::visit::IntoNeighbors<Neighbors = Vec<u64>> + // how to use NodeId here?
+            petgraph::visit::NodeIndexable +
+            petgraph::visit::IntoEdgesDirected<EdgesDirected = Vec<u64>>,
+{
+
+    let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+
+    for block in g.node_identifiers() {
+        nodes.push( NoInstrBasicBlock::new(
+            block, 0, g.neighbors(block), g.edges_directed(block, petgraph::Direction::Incoming).len()
+            )
+        );
+    }
+
+    nodes.sort_by_key(|node| node.address());
+
+    let vag: VirtualAddressGraph = VirtualAddressGraph::new(
+        nodes[0].address(),
+        nodes,
+    );
+
+    vag
+
+}
