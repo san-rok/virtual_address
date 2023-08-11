@@ -225,6 +225,7 @@ impl VirtualAddressGraph {
         let scc = tarjan_scc(self);
 
         // the node label for a sc component = first node's label in tarjan's output
+        // TODO: this ad hoc choice seems not that good (considering that later the id will be the smallest address)
         let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
         for comp in &scc {
             let value = comp[0];
@@ -360,7 +361,7 @@ impl VirtualAddressGraph {
     }
 
 
-    // add the given edge to the VAG
+    // add the given edge to the VAG: between EXISTING blocks
     // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edge(&mut self, edge: (u64, u64)) {
         self.node_at_target_mut(edge.0).add_target(edge.1);
@@ -377,13 +378,13 @@ impl VirtualAddressGraph {
     }
 
     // erase the given edge from the VAG
-    // note: used only when phantom target is added to the graph hence the indegree updated is there
+    // note: used only when phantom target is added to the graph hence the indegree update is there
     fn erase_edge(&mut self, edge: (u64, u64)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
 
     // erase the given edges to the VAG
-    // note: used only when phantom target is added to the graph hence the indegree updated is there
+    // note: used only when phantom target is added to the graph hence the indegree update is there
     pub fn erase_edges(&mut self, edges: &Vec<(u64, u64)>)  {
         // TODO: optimalize !!
         for &edge in edges {
@@ -392,6 +393,7 @@ impl VirtualAddressGraph {
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
+    // note: used only in scc::to_acyclic_vag hence the indegree update is there
     pub fn add_source_vertex(&mut self, in_edges: &[(u64, u64)]) {
         // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
@@ -413,6 +415,7 @@ impl VirtualAddressGraph {
 
 
     // given the list of outgoing edges: merge their targets into one new vertex
+    // note: used only in scc::to_acyclic_vag hence the indegree update is there
     pub fn add_target_vertex(&mut self, out_edges: &Vec<(u64, u64)>) {
 
         // delete the original outgoing edges
@@ -455,8 +458,6 @@ impl VirtualAddressGraph {
             kahngraph.kahn_algorithm()
 
         } else {
-            println!("NOT acyclic!");
-
             // collapse the strongly connected components into single vertices
             let condensed = self.condense();
 
@@ -475,25 +476,23 @@ impl VirtualAddressGraph {
                 if !comp.trivial() {
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
-                    // ERROR: println!("{:#x?}", comp_vag);
 
                     // Kahn's algorithm for the given component
                     let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
                     let mut ord_comp: Vec<u64> = kahngraph.kahn_algorithm();
 
                     // delete the auxiliary nodes from the order
+                    // in theory, they must be the first (0x0) and the last (0x1) in the order
                     ord_comp.retain(|&x| x != 0x0 && x != 0x1);
 
                     ordered_components.push(ord_comp);
                 }
             }
 
-            // println!("{:#x?}", topsort_condensed);
-            // println!("{:#x?}", ordered_components);
-
             // insert the inside orders of the components in the ordered components list
             let mut topsort: Vec<u64> = Vec::new();
 
+            // TODO: use somehow the component's ids
             while let Some(id) = topsort_condensed.pop() {
                 match ordered_components
                         .iter()
@@ -512,8 +511,6 @@ impl VirtualAddressGraph {
 
             // due to the pop()s, the order is reversed
             topsort.reverse();
-    
-            // println!("{:#x?}", topsort)
 
             topsort
         }
