@@ -11,20 +11,17 @@ use serde::{Serialize, Deserialize};
 use petgraph::algo::{is_cyclic_directed, tarjan_scc};
 use petgraph::visit::*;
 
-// test
-// type NodeId = u64;
-
 
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NoInstrBasicBlock {
+pub struct NoInstrBasicBlock /*<NodeId: Eq>*/ {
     // the virtual address of the block
-    address: u64,
+    address: u64, // NodeId,
     // the number of instructions in the block
     len: usize,
     // the addresses of blocks where we will jump next 
     // note: its length is at most two
-    targets: Vec<u64>,
+    targets: Vec<u64>, // Vec<NodeId>, // Vec<u64>,
     // number of blocks from we jump to here
     indegree: usize,
 }
@@ -32,6 +29,7 @@ pub struct NoInstrBasicBlock {
 
 impl NoInstrBasicBlock {
 
+    // sets an instance
     pub fn new(address: u64, len: usize, targets: Vec<u64>, indegree: usize) -> Self {
         NoInstrBasicBlock { 
             address, 
@@ -145,16 +143,17 @@ impl Ord for NoInstrBasicBlock {
 
 // almost the same as ControlFlowGraph but with NoInstrBasicBlock structs
 #[derive(Serialize, Deserialize, Debug)]
-pub struct VirtualAddressGraph {
-    address: u64,
-    nodes: Vec<NoInstrBasicBlock>,
+pub struct VirtualAddressGraph/*<NodeId>*/ {
+    // start: NodeId
+    address: u64, // NodeId,
+    nodes: Vec<NoInstrBasicBlock  /*<NodeId>*/ >,
 }
 
-impl VirtualAddressGraph {
+impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
     // creates a new instance given its address and blocks
     // need: keep the fields private from scc
-    pub fn new(address: u64, nodes: Vec<NoInstrBasicBlock>) -> Self {
+    pub fn new(address: u64 /*NodeId*/, nodes: Vec<NoInstrBasicBlock/*<NodeId>*/>) -> Self {
         VirtualAddressGraph { 
             address, 
             nodes,

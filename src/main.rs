@@ -158,6 +158,7 @@ fn main() {
 // generic functions
 
 
+// no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
 fn to_vag<G>(g: G) -> VirtualAddressGraph 
     where
@@ -165,9 +166,10 @@ fn to_vag<G>(g: G) -> VirtualAddressGraph
             petgraph::visit::IntoNeighbors<Neighbors = Vec<u64>> + // how to use NodeId here?
             petgraph::visit::NodeIndexable +
             petgraph::visit::IntoEdgesDirected<EdgesDirected = Vec<u64>>,
+        // <G as GraphRef>::NodeId: Eq + std::hash::Hash,
 {
 
-    let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+    let mut nodes: Vec<NoInstrBasicBlock/*<G::NodeId>*/> = Vec::new();
 
     for block in g.node_identifiers() {
         nodes.push( NoInstrBasicBlock::new(
