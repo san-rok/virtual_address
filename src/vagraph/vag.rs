@@ -204,15 +204,15 @@ impl VirtualAddressGraph {
     // TODO: error handling
     pub fn node_at_target(&self, target: u64) -> &NoInstrBasicBlock {
         // VAG is ordered by addresses
-        // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
-        let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
+        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &self.nodes()[pos]
     }
 
     // mutable reference to a node with a given address
     fn node_at_target_mut(&mut self, target: u64) -> &mut NoInstrBasicBlock {
-        // let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
-        let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
+        let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
+        // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &mut self.nodes_mut()[pos]
     }
 
@@ -225,7 +225,6 @@ impl VirtualAddressGraph {
         let scc = tarjan_scc(self);
 
         // the node label for a sc component = first node's label in tarjan's output
-        // the dictionary is stored in a HashMap -> effectiveness ?
         let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
         for comp in &scc {
             let value = comp[0];
@@ -244,11 +243,16 @@ impl VirtualAddressGraph {
 
             for node in comp {
 
+                // the block at the given address
+                let node = self.node_at_target(*node);
+                
+                /*
                 let pos = self
                     .nodes()
                     .binary_search_by(|block| block.address().cmp(node))
                     .unwrap();
                 let node = &self.nodes()[pos];
+                */
 
                 length += node.len();
 
@@ -293,11 +297,15 @@ impl VirtualAddressGraph {
         let mut cost: usize = 0;
 
         for address in &order {
+
+            ordered.push(self.node_at_target(*address));
+            /*
             let pos = self
                 .nodes()
                 .binary_search_by(|x| x.address().cmp(address))
                 .unwrap();
             ordered.push(&self.nodes()[pos]);
+            */
         }
 
         for (pos01, block) in ordered.iter().enumerate() {
@@ -326,8 +334,6 @@ impl VirtualAddressGraph {
     }
 
 
-
-
     // collection of such edges that generates cycles in the component
     // TODO: error handling - no backedges when graph is acyclic
     pub fn backedges(&self) -> Vec<(u64, u64)> {
@@ -344,6 +350,16 @@ impl VirtualAddressGraph {
     }
 
 
+    // add a new node to the existing list of nodes
+    fn add_block(&mut self, node: NoInstrBasicBlock) {
+
+        self.nodes.push(node);
+        // the nodes are sorted by address
+        self.nodes_mut().sort_by_key(|x| x.address());
+
+    }
+
+
     // add the given edge to the VAG
     // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edge(&mut self, edge: (u64, u64)) {
@@ -354,28 +370,25 @@ impl VirtualAddressGraph {
     // note: the edges vec<(u64, u64)> needs to be ordered
     // note: used only when generate a phantom target vertex hence no indegree modification needed !!
     fn add_edges(&mut self, edges: &Vec<(u64,u64)>) {
-
         // TODO: optimalize !!
         for &edge in edges {
             self.add_edge(edge);
         }
-        
-
     }
 
     // erase the given edge from the VAG
+    // note: used only when phantom target is added to the graph hence the indegree updated is there
     fn erase_edge(&mut self, edge: (u64, u64)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
 
     // erase the given edges to the VAG
+    // note: used only when phantom target is added to the graph hence the indegree updated is there
     pub fn erase_edges(&mut self, edges: &Vec<(u64, u64)>)  {
-
         // TODO: optimalize !!
         for &edge in edges {
             self.erase_edge(edge);
         }
-
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
@@ -427,15 +440,6 @@ impl VirtualAddressGraph {
 
         // the nodes in VAG are sorted by the address
         self.nodes_mut().sort_by_key(|x| x.address());        
-
-    }
-
-
-    // add a new node to the existing list of nodes
-    fn add_block(&mut self, node: NoInstrBasicBlock) {
-
-        self.nodes.push(node);
-        self.nodes_mut().sort_by_key(|x| x.address());
 
     }
 
