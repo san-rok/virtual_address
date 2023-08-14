@@ -2,11 +2,11 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, HashSet};
 
-// use crate::cfg::*;
+use crate::cfg::*;
 use crate::vagraph::kahn::*;
 use crate::vagraph::scc::*;
 
-use std::fmt::Display;
+use std::fmt::{Display, LowerHex};
 use std::hash::Hash;
 
 use serde::{Serialize, Deserialize};
@@ -15,11 +15,15 @@ use petgraph::algo::{is_cyclic_directed, tarjan_scc};
 use petgraph::visit::*;
 
 
+
+pub trait VAGNodeId: Eq + Hash + Display + Ord + LowerHex {}
+
+impl<T: Copy + Eq + Display + Hash + Ord + LowerHex> VAGNodeId for T {}
+
+
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NoInstrBasicBlock<N>
-where
-    N: Copy + Eq + Display + Hash + Ord,
+pub struct NoInstrBasicBlock<N: VAGNodeId>
 {
     // the virtual address of the block
     address: N,
@@ -107,10 +111,12 @@ where
     }
     */
 
+}
 
-    // translates a BasicBlock to NIBB, that is counts the number of instructions
-    // TODO: is it any good for that specific choice - BB is my previous "dummy" struct
-    /*
+// translates a BasicBlock to NIBB, that is counts the number of instructions
+// TODO: is it any good for that specific choice - BB is my previous "dummy" struct
+// BasicBlock struct - not generic type !!
+impl NoInstrBasicBlock<u64> {
     fn from_bb(bb: &BasicBlock) -> Self{
 
         NoInstrBasicBlock::<u64> { 
@@ -120,8 +126,6 @@ where
             indegree: 0_usize,
         }
     }
-    */
-
 }
 
 ///////////////////// TRAITS for NoInstrBasicBlock /////////////////////////
@@ -177,6 +181,35 @@ where
     nodes: Vec<NoInstrBasicBlock<N>>,
 }
 
+// ControlFlowGraph struct - not generic type
+impl VirtualAddressGraph<u64> {
+
+    // TODO: is this specific choice for my construction any good ?
+    // creates an instance from a ControlFlowGraph
+    pub fn from_cfg(cfg: &ControlFlowGraph) -> Self {
+        let mut nodes: Vec<NoInstrBasicBlock<u64>> = Vec::new();
+
+        for block in cfg.blocks() {
+            let node: NoInstrBasicBlock<u64> = NoInstrBasicBlock::from_bb(block);
+            nodes.push(node);
+        }
+
+        nodes.sort_by_key(|node| node.address());
+
+        let mut vag: VirtualAddressGraph<u64> = 
+        VirtualAddressGraph { 
+            address: cfg.address(), 
+            nodes,
+        };
+
+        // TODO: merge this two iterations - more effective algoithm!!
+        vag.update_in_degrees();
+
+        vag
+    }
+
+}
+
 impl<N> VirtualAddressGraph<N> 
 where
     N: Copy + Eq + Display + Hash + Ord,
@@ -218,32 +251,6 @@ where
             node.set_indegree( *indeg.get(&node.address()).unwrap() );
         }
     }
-
-    // TODO: is this specific choice for my construction any good ?
-    // creates an instance from a ControlFlowGraph
-    /*
-    pub fn from_cfg(cfg: &ControlFlowGraph) -> Self {
-        let mut nodes: Vec<NoInstrBasicBlock<u64>> = Vec::new();
-
-        for block in cfg.blocks() {
-            let node: NoInstrBasicBlock<u64> = NoInstrBasicBlock::from_bb(block);
-            nodes.push(node);
-        }
-
-        nodes.sort_by_key(|node| node.address());
-
-        let mut vag: VirtualAddressGraph<u64> = 
-        VirtualAddressGraph { 
-            address: cfg.address(), 
-            nodes,
-        };
-
-        // TODO: merge this two iterations - more effective algoithm!!
-        vag.update_in_degrees();
-
-        vag
-    }
-    */
 
     // the start virtual address
     pub fn address(&self) -> N {
@@ -562,7 +569,7 @@ where
                     let comp_vag = comp.to_acyclic_vag();
 
                     // Kahn's algorithm for the given component
-                    let mut kahngraph: KahnGraph = KahnGraph::from_vag(&comp_vag);
+                    let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&comp_vag);
                     let mut ord_comp: Vec<N> = kahngraph.kahn_algorithm();
 
                     // delete the auxiliary nodes from the order

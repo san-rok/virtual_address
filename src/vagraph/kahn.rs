@@ -2,7 +2,7 @@
 use std::collections::BinaryHeap;
 
 
-use crate::vagraph::vag::{VirtualAddressGraph, NoInstrBasicBlock};
+use crate::vagraph::vag::*; //{VirtualAddressGraph, NoInstrBasicBlock};
 
 use std::fmt::Display;
 use std::hash::Hash;
@@ -10,9 +10,7 @@ use std::hash::Hash;
 
 
 #[derive(Debug)]
-struct KahnBasicBlock<'a, N>
-where
-    N: Copy + Eq + Display + Hash + Ord,
+struct KahnBasicBlock<'a, N: VAGNodeId>
 {
     block: &'a NoInstrBasicBlock<N>,
     // how many of the incoming edges are deleted so far
@@ -20,7 +18,7 @@ where
     deleted: usize,
 }
 
-impl<'a, N> KahnBasicBlock<'a, N>
+impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N>
 where
     N: Copy + Eq + Display + Hash + Ord,
 {
