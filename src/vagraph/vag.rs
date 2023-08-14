@@ -2,9 +2,12 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, HashSet};
 
-use crate::cfg::*;
+// use crate::cfg::*;
 use crate::vagraph::kahn::*;
 use crate::vagraph::scc::*;
+
+use std::fmt::Display;
+use std::hash::Hash;
 
 use serde::{Serialize, Deserialize};
 
@@ -14,7 +17,10 @@ use petgraph::visit::*;
 
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NoInstrBasicBlock<N: Eq + Ord> {
+pub struct NoInstrBasicBlock<N>
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // the virtual address of the block
     address: N,
     // the number of instructions in the block
@@ -27,8 +33,10 @@ pub struct NoInstrBasicBlock<N: Eq + Ord> {
 }
 // if we consider the block alone, then its indegree is set to be 0
 
-impl<N: Eq + Ord> NoInstrBasicBlock<N> {
-
+impl<N> NoInstrBasicBlock<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // sets an instance
     pub fn new(address: N, len: usize, targets: Vec<N>, indegree: usize) -> Self {
         NoInstrBasicBlock::<N> { 
@@ -102,16 +110,17 @@ impl<N: Eq + Ord> NoInstrBasicBlock<N> {
 
     // translates a BasicBlock to NIBB, that is counts the number of instructions
     // TODO: is it any good for that specific choice - BB is my previous "dummy" struct
-    fn from_bb(bb: &BasicBlock) -> Self {
+    /*
+    fn from_bb(bb: &BasicBlock) -> Self{
 
-        NoInstrBasicBlock { 
+        NoInstrBasicBlock::<u64> { 
             address: bb.address(), 
             len: bb.instructions().len(), 
             targets: bb.targets().to_vec(),
             indegree: 0_usize,
         }
-
     }
+    */
 
 }
 
@@ -120,23 +129,35 @@ impl<N: Eq + Ord> NoInstrBasicBlock<N> {
 // N: Eq trait bound is declared previously
 
 // equality of NIBB's whenever their addresses are the same
-impl<N: Eq + Ord> PartialEq for NoInstrBasicBlock<N> {
+impl<N> PartialEq for NoInstrBasicBlock<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     fn eq(&self, other: &Self) -> bool {
         self.address() == other.address()
     }
 }
 
-impl<N: Eq + Ord> Eq for NoInstrBasicBlock<N> {}
+impl<N> Eq for NoInstrBasicBlock<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{}
 
 // order of NIBB's: first by the number of incoming edges then by the length of basic block
 // WHY: is this bound on N is needed ?
-impl<N: Eq + Ord> PartialOrd for NoInstrBasicBlock<N> {
+impl<N> PartialOrd for NoInstrBasicBlock<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<N: Eq + Ord> Ord for NoInstrBasicBlock<N> {
+impl<N> Ord for NoInstrBasicBlock<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.indegree().cmp(&other.indegree())
             .then(self.len().cmp(&other.len()))
@@ -147,14 +168,19 @@ impl<N: Eq + Ord> Ord for NoInstrBasicBlock<N> {
 
 // almost the same as ControlFlowGraph but with NoInstrBasicBlock structs
 #[derive(Serialize, Deserialize, Debug)]
-pub struct VirtualAddressGraph<N: Eq + Ord> {
+pub struct VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // start: N - TODO!
     address: N,
     nodes: Vec<NoInstrBasicBlock<N>>,
 }
 
-impl<N: Eq + Ord> VirtualAddressGraph<N> {
-
+impl<N> VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // creates a new instance given its address and blocks
     // need: keep the fields private from scc
     pub fn new(address: N, nodes: Vec<NoInstrBasicBlock<N>>) -> Self {
@@ -195,6 +221,7 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
 
     // TODO: is this specific choice for my construction any good ?
     // creates an instance from a ControlFlowGraph
+    /*
     pub fn from_cfg(cfg: &ControlFlowGraph) -> Self {
         let mut nodes: Vec<NoInstrBasicBlock<u64>> = Vec::new();
 
@@ -215,8 +242,8 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
         vag.update_in_degrees();
 
         vag
-
     }
+    */
 
     // the start virtual address
     pub fn address(&self) -> N {
@@ -446,8 +473,11 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
         // with 0 indegree and large length
         self.add_block(
             NoInstrBasicBlock {
-                address: 0x0,
-                len: 9999,
+                // the source vertex has the same address as the original subgraph's smallest addressed vertex
+                // this won't cause any conflict since only the length and the indegree will matter in the algorithm
+                // NOT CORRECT!!
+                address: self.nodes()[0].address(), // NEED: something like N::MIN,
+                len: 99999,
                 targets: in_edges.iter().map(|(_s,t)| *t).collect(),
                 indegree: 0,
             }
@@ -473,7 +503,10 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
         // with given indegree and small length
         self.add_block(
             NoInstrBasicBlock {
-                address: 0x1,
+                // the target vertex has the same address as the original subgraph's lasrgest addressed vertex
+                // this won't cause any conflict since only the length and the indegree will matter in the algorithm
+                // NOT CORRECT
+                address: self.nodes()[self.nodes().len()].address(), // NEED: something like N::MAX,
                 len: 0,
                 targets: vec![],
                 // at the moment no incoming edges declared
@@ -505,7 +538,7 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
         // TODO: is_cyclic_directed is recursive - maybe use topsort, but that seems redundant
         if !(is_cyclic_directed(self)) {
             // Kahn's algorithm
-            let mut kahngraph: KahnGraph = KahnGraph::from_vag(self);
+            let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(self);
             kahngraph.kahn_algorithm()
 
         } else {
@@ -513,11 +546,11 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
             let condensed = self.condense();
 
             // Kahn's algorithm for the condensed graph
-            let mut kahngraph: KahnGraph = KahnGraph::from_vag(&condensed);
+            let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&condensed);
             let mut topsort_condensed = kahngraph.kahn_algorithm();
 
             // Kahn's algorithm for the strongly connected components
-            let components: Vec<Component> = Component::from_vag(self);
+            let components: Vec<Component<N>> = Component::from_vag(self);
 
             // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
             let mut ordered_components: Vec<Vec<N>> = Vec::new();
@@ -534,6 +567,7 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
 
                     // delete the auxiliary nodes from the order
                     // in theory, they must be the first (0x0) and the last (0x1) in the order
+                    // NOT CORRECT !!
                     ord_comp.retain(|&x| x != 0x0 && x != 0x1);
 
                     ordered_components.push(ord_comp);
@@ -590,13 +624,19 @@ impl<N: Eq + Ord> VirtualAddressGraph<N> {
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
 // NOTE: there is a topologiccal sort in petgraph - but it is DFS based
 
-impl<N: Eq + Ord> petgraph::visit::GraphBase for VirtualAddressGraph<N> {
+impl<N> petgraph::visit::GraphBase for VirtualAddressGraph<N>
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type NodeId = N;
     type EdgeId = (N, N);
 }
 
 
-impl<'a, N: Eq + Ord> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph<N> {
+impl<'a, N> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
 
     fn node_identifiers(self) -> Self::NodeIdentifiers {
@@ -604,7 +644,10 @@ impl<'a, N: Eq + Ord> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddres
     }
 }
 
-impl<'a, N: Eq + Ord> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph<N> {
+impl<'a, N> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
 
     fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
@@ -619,8 +662,10 @@ impl<'a, N: Eq + Ord> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph
     }
 }
 
-impl<'a, N: Eq + Ord> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph<N> {
-
+impl<'a, N> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     fn node_bound(&self) -> usize {
         self.nodes().len()
     }
@@ -639,7 +684,10 @@ impl<'a, N: Eq + Ord> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph
 
 }
 
-impl<N: Eq + Ord> petgraph::visit::Visitable for VirtualAddressGraph<N> {
+impl<N> petgraph::visit::Visitable for VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type Map = HashSet<Self::NodeId>;
 
     fn visit_map(&self) -> Self::Map {
@@ -656,7 +704,10 @@ impl<N: Eq + Ord> petgraph::visit::Visitable for VirtualAddressGraph<N> {
 // package: dots
 // for .dot and hence .svg plot
 
-impl<'a, N: Eq + Ord> dot2::Labeller<'a> for VirtualAddressGraph<N> {
+impl<'a, N> dot2::Labeller<'a> for VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type Node = N;
     type Edge = (N, N);
     type Subgraph = ();
@@ -688,7 +739,10 @@ impl<'a, N: Eq + Ord> dot2::Labeller<'a> for VirtualAddressGraph<N> {
 }
 
 
-impl<'a, N: Eq + Ord> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
+impl<'a, N> dot2::GraphWalk<'a> for VirtualAddressGraph<N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     type Node = N;
     type Edge = (N, N);
     type Subgraph = ();

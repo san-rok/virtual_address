@@ -1,4 +1,7 @@
 
+use std::fmt::Display;
+use std::hash::Hash;
+
 use std::collections::HashSet;
 use petgraph::algo::tarjan_scc;
 
@@ -6,15 +9,20 @@ use crate::vagraph::vag::*;
 
 
 #[derive(Debug)]
-pub struct Component<'a, N> {
+pub struct Component<'a, N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // the original graph
     graph: &'a VirtualAddressGraph<N>,
     // the strongly connected component
     component: HashSet<N>,
 }
 
-impl<'a, N> Component<'a, N> {
-
+impl<'a, N> Component<'a, N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // given a VAG instance returns a vector of its components
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Vec<Self> {
 

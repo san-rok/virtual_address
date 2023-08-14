@@ -4,18 +4,26 @@ use std::collections::BinaryHeap;
 
 use crate::vagraph::vag::{VirtualAddressGraph, NoInstrBasicBlock};
 
+use std::fmt::Display;
+use std::hash::Hash;
+
 
 
 #[derive(Debug)]
-struct KahnBasicBlock<'a, N> {
+struct KahnBasicBlock<'a, N>
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     block: &'a NoInstrBasicBlock<N>,
     // how many of the incoming edges are deleted so far
     // this field will be modified during the weighted Kahn's algorithm
     deleted: usize,
 }
 
-impl<'a, N> KahnBasicBlock<'a, N> {
-
+impl<'a, N> KahnBasicBlock<'a, N>
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     fn address(&self) -> N {
         self.block.address()
     }
@@ -55,13 +63,18 @@ impl<'a, N> KahnBasicBlock<'a, N> {
 
 
 #[derive(Debug)]
-pub struct KahnGraph<'a, N> {
+pub struct KahnGraph<'a, N>
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     address: N,
     nodes: Vec<KahnBasicBlock<'a, N>>,
 }
 
-impl<'a, N> KahnGraph<'a, N> {
-
+impl<'a, N> KahnGraph<'a, N> 
+where
+    N: Copy + Eq + Display + Hash + Ord,
+{
     // generates a KahnGraph instance from a VAG
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Self {
 

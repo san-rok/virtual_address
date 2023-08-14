@@ -35,9 +35,9 @@ fn main() {
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
-    let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
+    // let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
 
-    let _topsort = vag.weighted_order();
+    // let _topsort = vag.weighted_order();
     // println!("{:x?}", topsort);
 
 
