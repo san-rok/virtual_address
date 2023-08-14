@@ -499,7 +499,7 @@ impl<N> VirtualAddressGraph<N> {
 
 
     // gets a VAG and returns the "optimal" order of its vertices
-    pub fn weighted_order(&self) -> Vec<u64> {
+    pub fn weighted_order(&self) -> Vec<N> {
         
         // TODO: is_cyclic_directed is recursive - maybe use topsort, but that seems redundant
         if !(is_cyclic_directed(self)) {
@@ -519,7 +519,7 @@ impl<N> VirtualAddressGraph<N> {
             let components: Vec<Component> = Component::from_vag(self);
 
             // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
-            let mut ordered_components: Vec<Vec<u64>> = Vec::new();
+            let mut ordered_components: Vec<Vec<N>> = Vec::new();
 
             for comp in components {
                 // if the component is trivial (i.e. single vertex) -> do nothing

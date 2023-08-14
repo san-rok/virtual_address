@@ -6,25 +6,25 @@ use crate::vagraph::vag::*;
 
 
 #[derive(Debug)]
-pub struct Component<'a> {
+pub struct Component<'a, N> {
     // the original graph
-    graph: &'a VirtualAddressGraph,
+    graph: &'a VirtualAddressGraph<N>,
     // the strongly connected component
-    component: HashSet<u64>,
+    component: HashSet<N>,
 }
 
-impl<'a> Component<'a> {
+impl<'a, N> Component<'a, N> {
 
     // given a VAG instance returns a vector of its components
-    pub fn from_vag(vag: &'a VirtualAddressGraph) -> Vec<Self> {
+    pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Vec<Self> {
 
         let mut components: Vec<Self> = Vec::new();
 
         // tarjan_scc -> vector of strongly connected component's addresses vector
-        let scc: Vec<Vec<u64>> = tarjan_scc(vag);
+        let scc: Vec<Vec<N>> = tarjan_scc(vag);
 
         for comp in scc {
-            let mut strongly: HashSet<u64> = HashSet::new();
+            let mut strongly: HashSet<N> = HashSet::new();
             for node in comp {
                 // TODO: if let not ??
                 match strongly.insert(node) {
@@ -46,17 +46,17 @@ impl<'a> Component<'a> {
     }
 
     // returns a reference to the original graph
-    fn whole(&self) -> &VirtualAddressGraph {
+    fn whole(&self) -> &VirtualAddressGraph<N> {
         self.graph
     }
 
     // returns the collection of nodes in the strongly connnected component
-    fn nodes(&self) -> &HashSet<u64> {
+    fn nodes(&self) -> &HashSet<N> {
         &self.component
     }
 
     // checks if a given node is in the component
-    fn contains(&self, node: u64) -> bool {
+    fn contains(&self, node: N) -> bool {
         self.nodes().contains(&node)
     }
 
@@ -66,15 +66,15 @@ impl<'a> Component<'a> {
     }
 
     // returns a reference to the targets of a given vertex in the component
-    fn targets(&self, node: u64) -> &[u64] {
+    fn targets(&self, node: N) -> &[N] {
         self.whole().node_at_target(node).targets()
     }
 
     // a collection of incoming edges
     // TODO: HashSet or Vector ??
-    fn incoming_edges(&self) -> Vec<(u64, u64)> {
+    fn incoming_edges(&self) -> Vec<(N, N)> {
 
-        let mut incoming: Vec<(u64, u64)> = Vec::new();
+        let mut incoming: Vec<(N, N)> = Vec::new();
 
         for node in self.nodes() {
 
@@ -89,6 +89,7 @@ impl<'a> Component<'a> {
         }
 
         // sorted by source and then target
+        // TODO: is it really needed?
         incoming.sort_by_key(|item| (item.0, item.0) );
         incoming
 
@@ -96,9 +97,9 @@ impl<'a> Component<'a> {
 
     // a collection of outgoing edges
     // TODO: HashSet or Vector ??
-    fn outgoing_edges(&self) -> Vec<(u64, u64)> {
+    fn outgoing_edges(&self) -> Vec<(N, N)> {
 
-        let mut outgoing: Vec<(u64, u64)> = Vec::new();
+        let mut outgoing: Vec<(N, N)> = Vec::new();
 
         for &node in self.nodes() {
             for &target in self.targets(node) {
@@ -118,18 +119,18 @@ impl<'a> Component<'a> {
     // the sources of the incoming edges are merged into one vertex
     // the targets of the outgoing edges are merged into one vertex
     // MAYBE: create an enum that sets if acyclic or not
-    pub fn to_acyclic_vag(&self) -> VirtualAddressGraph {
+    pub fn to_acyclic_vag(&self) -> VirtualAddressGraph<N> {
 
         let address = self.nodes().iter().min().unwrap();
 
-        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+        let mut nodes: Vec<NoInstrBasicBlock<N>> = Vec::new();
         for node in self.nodes() {
             // TODO: do this without clone()
             // MAYBE: rewrite the whole Kahn's algorithm to accept avoided edges, vertices, etc.
             nodes.push(self.whole().node_at_target(*node).clone());
         }
 
-        let mut vag: VirtualAddressGraph = VirtualAddressGraph::new(*address, nodes);
+        let mut vag: VirtualAddressGraph<N> = VirtualAddressGraph::new(*address, nodes);
         
         // let backs = vag.backedges();
         // for (s, t) in backs {
@@ -139,8 +140,8 @@ impl<'a> Component<'a> {
 
 
         
-        let ins: Vec<(u64, u64)> = self.incoming_edges();
-        let outs: Vec<(u64, u64)> = self.outgoing_edges();
+        let ins: Vec<(N, N)> = self.incoming_edges();
+        let outs: Vec<(N, N)> = self.outgoing_edges();
 
         vag.add_source_vertex(&ins);
         vag.add_target_vertex(&outs);
