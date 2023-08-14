@@ -160,7 +160,7 @@ fn main() {
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
-fn to_vag<G>(g: G) -> VirtualAddressGraph 
+fn to_vag<G>(g: G) -> VirtualAddressGraph<NodeId> 
     where
         G:  petgraph::visit::IntoNodeIdentifiers<NodeId = u64, EdgeId = (u64, u64)> +
             petgraph::visit::IntoNeighbors<Neighbors = Vec<u64>> + // how to use NodeId here?
