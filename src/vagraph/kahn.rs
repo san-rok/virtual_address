@@ -7,20 +7,20 @@ use crate::vagraph::vag::{VirtualAddressGraph, NoInstrBasicBlock};
 
 
 #[derive(Debug)]
-struct KahnBasicBlock<'a> {
-    block: &'a NoInstrBasicBlock,
+struct KahnBasicBlock<'a, N> {
+    block: &'a NoInstrBasicBlock<N>,
     // how many of the incoming edges are deleted so far
     // this field will be modified during the weighted Kahn's algorithm
     deleted: usize,
 }
 
-impl<'a> KahnBasicBlock<'a> {
+impl<'a, N> KahnBasicBlock<'a, N> {
 
-    fn address(&self) -> u64 {
+    fn address(&self) -> N {
         self.block.address()
     }
 
-    fn block(&self) -> &'a NoInstrBasicBlock {
+    fn block(&self) -> &'a NoInstrBasicBlock<N> {
         self.block
     }
 
@@ -31,7 +31,7 @@ impl<'a> KahnBasicBlock<'a> {
     */
 
     /*
-    fn targets(&self) -> &'a [u64] {
+    fn targets(&self) -> &'a [N] {
         self.block.targets()
     }
     */
@@ -55,20 +55,20 @@ impl<'a> KahnBasicBlock<'a> {
 
 
 #[derive(Debug)]
-pub struct KahnGraph<'a> {
-    address: u64,
-    nodes: Vec<KahnBasicBlock<'a>>,
+pub struct KahnGraph<'a, N> {
+    address: N,
+    nodes: Vec<KahnBasicBlock<'a, N>>,
 }
 
-impl<'a> KahnGraph<'a> {
+impl<'a, N> KahnGraph<'a, N> {
 
     // generates a KahnGraph instance from a VAG
-    pub fn from_vag(vag: &'a VirtualAddressGraph) -> Self {
+    pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Self {
 
-        let mut nodes: Vec<KahnBasicBlock> = Vec::new();
+        let mut nodes: Vec<KahnBasicBlock<N>> = Vec::new();
 
         for node in vag.nodes() {
-            nodes.push( KahnBasicBlock{
+            nodes.push( KahnBasicBlock::<N>{
                     block: node,
                     deleted: 0,
                 }
@@ -86,22 +86,22 @@ impl<'a> KahnGraph<'a> {
 
     /*
     // returns the address of the KahnGraph (i.e. the starting va)
-    fn address(&self) -> u64 {
+    fn address(&self) -> N {
         self.address
     }
     */
 
     // returns the slice of KBBs of the KahnGraph
-    fn nodes(&self) -> &[KahnBasicBlock<'a>] {
+    fn nodes(&self) -> &[KahnBasicBlock<'a, N>] {
         &self.nodes
     }
 
     // returns a mutable slice of KBBs of the KahnGraph
-    fn nodes_mut(&mut self) -> &mut [KahnBasicBlock<'a>] {
+    fn nodes_mut(&mut self) -> &mut [KahnBasicBlock<'a, N>] {
         &mut self.nodes
     }
 
-    fn position(&self, target: u64) -> usize {
+    fn position(&self, target: N) -> usize {
         self
             .nodes()
             .binary_search_by(|a| a.address().cmp(&target))
@@ -109,18 +109,18 @@ impl<'a> KahnGraph<'a> {
     }
 
     /*
-    fn node_at_target(&self, target: u64) -> &KahnBasicBlock<'a> {
+    fn node_at_target(&self, target: N) -> &KahnBasicBlock<'a> {
         let pos = self.position(target);
         &self.nodes()[pos]
     }
     */
 
-    fn node_at_target_mut(&mut self, target: u64) -> &mut KahnBasicBlock<'a> {
+    fn node_at_target_mut(&mut self, target: N) -> &mut KahnBasicBlock<'a, N> {
         let pos = self.position(target);
         &mut self.nodes_mut()[pos]
     }
 
-    fn reduce_indegree(&mut self, target: u64) -> Option<&'a NoInstrBasicBlock> {
+    fn reduce_indegree(&mut self, target: N) -> Option<&'a NoInstrBasicBlock<N>> {
         let kbb = self.node_at_target_mut(target);
         
         kbb.recude_by_one();
@@ -141,12 +141,12 @@ impl<'a> KahnGraph<'a> {
     // for directed acyclic graphs
     // the weights are used for tie breaking when there are more than one vertex with 
     // zero indegree: sorted by two keys: original in-degree and then lengths of block
-    pub fn kahn_algorithm(&mut self) -> Vec<u64> {
+    pub fn kahn_algorithm(&mut self) -> Vec<N> {
 
         // topsort: the topological order of the basic blocks - collecting only the addresses
-        let mut topsort: Vec<u64> = Vec::new();
+        let mut topsort: Vec<N> = Vec::new();
         // an auxiliary vector: the zero in-degree vertices of the running algorithm
-        let mut visit: BinaryHeap<&NoInstrBasicBlock> = BinaryHeap::new();
+        let mut visit: BinaryHeap<&NoInstrBasicBlock<N>> = BinaryHeap::new();
 
 
         // initialization: collect the initially zero in-degree vertices
