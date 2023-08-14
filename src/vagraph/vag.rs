@@ -14,24 +14,24 @@ use petgraph::visit::*;
 
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NoInstrBasicBlock /*<NodeId: Eq>*/ {
+pub struct NoInstrBasicBlock<N: Eq + Ord> {
     // the virtual address of the block
-    address: u64, // NodeId,
+    address: N,
     // the number of instructions in the block
     len: usize,
     // the addresses of blocks where we will jump next 
     // note: its length is at most two
-    targets: Vec<u64>, // Vec<NodeId>, // Vec<u64>,
+    targets: Vec<N>,
     // number of blocks from we jump to here
     indegree: usize,
 }
 // if we consider the block alone, then its indegree is set to be 0
 
-impl NoInstrBasicBlock {
+impl<N> NoInstrBasicBlock<N> {
 
     // sets an instance
-    pub fn new(address: u64, len: usize, targets: Vec<u64>, indegree: usize) -> Self {
-        NoInstrBasicBlock { 
+    pub fn new(address: N, len: usize, targets: Vec<N>, indegree: usize) -> Self {
+        NoInstrBasicBlock::<N> { 
             address, 
             len,
             targets,
@@ -40,7 +40,7 @@ impl NoInstrBasicBlock {
     }
     
     // the virtual address of the block
-    pub fn address(&self) -> u64 {
+    pub fn address(&self) -> N {
         self.address
     }
 
@@ -50,19 +50,19 @@ impl NoInstrBasicBlock {
     }
 
     // a slice of the target blocks' addresses
-    pub fn targets(&self) -> &[u64] {
+    pub fn targets(&self) -> &[N] {
         &self.targets
     }
 
     // extends the vector of targets by the given address
     // note: we can not modify here the target's indegree !!!
-    fn add_target(&mut self, target: u64) {
+    fn add_target(&mut self, target: N) {
         self.targets.push(target);
     }
 
     // deletes the given target from the targets vector if it's there (yes it is)
     // note: we can not modify here the target's indegree !!
-    fn erase_target(&mut self, target: u64) {
+    fn erase_target(&mut self, target: N) {
         if let Some(pos) = self.targets().iter().position(|x| x == &target) {
             self.targets.remove(pos);
             // as mentioned above: the indegree of the given block does NOT change
@@ -101,6 +101,7 @@ impl NoInstrBasicBlock {
 
 
     // translates a BasicBlock to NIBB, that is counts the number of instructions
+    // TODO: is it any good for that specific choice - BB is my previous "dummy" struct
     fn from_bb(bb: &BasicBlock) -> Self {
 
         NoInstrBasicBlock { 
@@ -116,23 +117,25 @@ impl NoInstrBasicBlock {
 
 ///////////////////// TRAITS for NoInstrBasicBlock /////////////////////////
 
+// N: Eq trait bound is declared previously
+
 // equality of NIBB's whenever their addresses are the same
-impl PartialEq for NoInstrBasicBlock {
+impl<N> PartialEq for NoInstrBasicBlock<N> {
     fn eq(&self, other: &Self) -> bool {
         self.address() == other.address()
     }
 }
 
-impl Eq for NoInstrBasicBlock {}
+impl<N> Eq for NoInstrBasicBlock<N> {}
 
 // order of NIBB's: first by the number of incoming edges then by the length of basic block
-impl PartialOrd for NoInstrBasicBlock {
+impl<N> PartialOrd for NoInstrBasicBlock<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for NoInstrBasicBlock {
+impl<N> Ord for NoInstrBasicBlock<N> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.indegree().cmp(&other.indegree())
             .then(self.len().cmp(&other.len()))
@@ -143,27 +146,27 @@ impl Ord for NoInstrBasicBlock {
 
 // almost the same as ControlFlowGraph but with NoInstrBasicBlock structs
 #[derive(Serialize, Deserialize, Debug)]
-pub struct VirtualAddressGraph/*<NodeId>*/ {
-    // start: NodeId
-    address: u64, // NodeId,
-    nodes: Vec<NoInstrBasicBlock  /*<NodeId>*/ >,
+pub struct VirtualAddressGraph<N> {
+    // start: N - TODO!
+    address: N,
+    nodes: Vec<NoInstrBasicBlock<N>>,
 }
 
-impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
+impl<N> VirtualAddressGraph<N> {
 
     // creates a new instance given its address and blocks
     // need: keep the fields private from scc
-    pub fn new(address: u64 /*NodeId*/, nodes: Vec<NoInstrBasicBlock/*<NodeId>*/>) -> Self {
-        VirtualAddressGraph { 
+    pub fn new(address: N, nodes: Vec<NoInstrBasicBlock<N>>) -> Self {
+        VirtualAddressGraph::<N> { 
             address, 
             nodes,
         }
     }
 
     // returns the list (BTreeMap - sorted by address) of indegrees of an instance
-    fn in_degrees(&self) -> BTreeMap<u64, usize> {
+    fn in_degrees(&self) -> BTreeMap<N, usize> {
 
-        let mut indeg: BTreeMap<u64, usize> = BTreeMap::new();
+        let mut indeg: BTreeMap<N, usize> = BTreeMap::new();
         
         for node in self.nodes() {
             indeg.entry(node.address()).or_insert(0);
@@ -189,18 +192,19 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
         }
     }
 
+    // TODO: is this specific choice for my construction any good ?
     // creates an instance from a ControlFlowGraph
     pub fn from_cfg(cfg: &ControlFlowGraph) -> Self {
-        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+        let mut nodes: Vec<NoInstrBasicBlock<u64>> = Vec::new();
 
         for block in cfg.blocks() {
-            let node: NoInstrBasicBlock = NoInstrBasicBlock::from_bb(block);
+            let node: NoInstrBasicBlock<u64> = NoInstrBasicBlock::from_bb(block);
             nodes.push(node);
         }
 
         nodes.sort_by_key(|node| node.address());
 
-        let mut vag = 
+        let mut vag: VirtualAddressGraph<u64> = 
         VirtualAddressGraph { 
             address: cfg.address(), 
             nodes,
@@ -214,23 +218,23 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     }
 
     // the start virtual address
-    pub fn address(&self) -> u64 {
+    pub fn address(&self) -> N {
         self.address
     }
 
     // unmutable slice of nodes
-    pub fn nodes(&self) -> &[NoInstrBasicBlock] {
+    pub fn nodes(&self) -> &[NoInstrBasicBlock<N>] {
         &self.nodes
     }
 
     // mutable slice of nodes
-    fn nodes_mut(&mut self) -> &mut [NoInstrBasicBlock] {
+    fn nodes_mut(&mut self) -> &mut [NoInstrBasicBlock<N>] {
         &mut self.nodes
     }
 
     // reference to a node with a given address
     // TODO: error handling
-    pub fn node_at_target(&self, target: u64) -> &NoInstrBasicBlock {
+    pub fn node_at_target(&self, target: N) -> &NoInstrBasicBlock<N> {
         // VAG is ordered by addresses
         let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
         // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
@@ -238,7 +242,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     }
 
     // mutable reference to a node with a given address
-    fn node_at_target_mut(&mut self, target: u64) -> &mut NoInstrBasicBlock {
+    fn node_at_target_mut(&mut self, target: N) -> &mut NoInstrBasicBlock<N> {
         let pos: usize = self.nodes().binary_search_by(|x| x.address().cmp(&target)).unwrap();
         // let pos = self.nodes().iter().position(|x| x.address() == target).unwrap();
         &mut self.nodes_mut()[pos]
@@ -254,7 +258,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
         // the node label for a sc component = first node's label in tarjan's output
         // TODO: this ad hoc choice seems not that good (considering that later the id will be the smallest address)
-        let mut comp_dict: BTreeMap<u64, u64> = BTreeMap::new();
+        let mut comp_dict: BTreeMap<N, N> = BTreeMap::new();
         for comp in &scc {
             let value = comp[0];
             for node in comp {
@@ -262,13 +266,13 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
             }
         }
 
-        let mut nodes: Vec<NoInstrBasicBlock> = Vec::new();
+        let mut nodes: Vec<NoInstrBasicBlock<N>> = Vec::new();
 
         for comp in &scc {
         
-            let address: u64 = comp[0];
+            let address: N = comp[0];
             let mut length: usize = 0;
-            let mut targets: Vec<u64> = Vec::new();
+            let mut targets: Vec<N> = Vec::new();
 
             for node in comp {
 
@@ -294,7 +298,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
             }
 
             nodes.push(
-                NoInstrBasicBlock { 
+                NoInstrBasicBlock::<N> { 
                     address, 
                     len: length, 
                     targets,
@@ -306,7 +310,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
         // for later use: sort by address
         nodes.sort_by_key(|node| node.address());
 
-        let mut vag =
+        let mut vag: VirtualAddressGraph<N> =
         VirtualAddressGraph { 
             address: self.address(),
             nodes,
@@ -319,10 +323,10 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     }
 
 
-    pub fn cost_of_order(&self, order: Vec<u64>) -> usize {
+    pub fn cost_of_order(&self, order: Vec<N>) -> usize {
 
         // the list of nodes in the given order
-        let mut ordered: Vec<&NoInstrBasicBlock> = Vec::new();
+        let mut ordered: Vec<&NoInstrBasicBlock<N>> = Vec::new();
         let mut cost: usize = 0;
 
         for address in &order {
@@ -341,7 +345,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
             for target in block.targets() {
                 let mut edge_weight: usize = 0;
                 
-                // the given order can be any arbitrary order
+                // the given order can be any arbitrary
                 let pos02: usize = order
                     .iter()
                     .position(|x| x == target)
@@ -365,9 +369,9 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
     // collection of such edges that generates cycles in the component
     // TODO: error handling - no backedges when graph is acyclic
-    pub fn backedges(&self) -> Vec<(u64, u64)> {
+    pub fn backedges(&self) -> Vec<(N, N)> {
 
-        let mut backedges: Vec<(u64,u64)> = Vec::new();
+        let mut backedges: Vec<(N,N)> = Vec::new();
 
         depth_first_search(self, Some(self.address()), |event| {
             if let DfsEvent::BackEdge(u, v) = event {
@@ -381,7 +385,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
     // add a new node to the existing list of nodes
     // note: the way we use this - no indegree modification is needed for the targets
-    fn add_block(&mut self, node: NoInstrBasicBlock) {
+    fn add_block(&mut self, node: NoInstrBasicBlock<N>) {
 
         // the new edges modify the indegrees of the targets
         /*
@@ -399,7 +403,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
 
     // add the given edge to the VAG: between EXISTING blocks
-    fn add_edge(&mut self, edge: (u64, u64)) {
+    fn add_edge(&mut self, edge: (N, N)) {
         self.node_at_target_mut(edge.0).add_target(edge.1);
 
         // increase the indegree of the target block
@@ -407,8 +411,8 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     }
 
     // add the given edges to the VAG
-    // note: the edges vec<(u64, u64)> needs to be ordered
-    fn add_edges(&mut self, edges: &Vec<(u64,u64)>) {
+    // note: the edges vec<(N, N)> needs to be ordered
+    fn add_edges(&mut self, edges: &Vec<(N,N)>) {
         // TODO: optimalize !!
         for &edge in edges {
             self.add_edge(edge);
@@ -418,7 +422,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     // erase the given edge from the VAG
     // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
     //       in add_target_vertex() method, hence no indegree modification is necessary
-    fn erase_edge(&mut self, edge: (u64, u64)) {
+    fn erase_edge(&mut self, edge: (N, N)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
 
@@ -426,7 +430,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
     //       in add_target_vertex() method, hence no indegree modification is necessary
     // note: used only when phantom target is added to the graph hence the indegree update is there
-    pub fn erase_edges(&mut self, edges: &Vec<(u64, u64)>)  {
+    pub fn erase_edges(&mut self, edges: &Vec<(N, N)>)  {
         // TODO: optimalize !!
         for &edge in edges {
             self.erase_edge(edge);
@@ -434,7 +438,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
-    pub fn add_source_vertex(&mut self, in_edges: &[(u64, u64)]) {
+    pub fn add_source_vertex(&mut self, in_edges: &[(N, N)]) {
         // since the source of the incoming edges is not in the VAG - we don't have to delete anything
 
         // the sources of these edges then are merged into one vertex
@@ -459,7 +463,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 
     // given the list of outgoing edges: merge their targets into one new vertex
     // note: used only in scc::to_acyclic_vag hence the indegree update is there
-    pub fn add_target_vertex(&mut self, out_edges: &Vec<(u64, u64)>) {
+    pub fn add_target_vertex(&mut self, out_edges: &Vec<(N, N)>) {
 
         // delete the original outgoing edges, which points to non-existing vertices
         self.erase_edges(out_edges);
@@ -478,7 +482,7 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
         );
 
         // the new outgoing edges will have this new vertex as target
-        let mut new_outgoing: Vec<(u64,u64)> = Vec::new();
+        let mut new_outgoing: Vec<(N,N)> = Vec::new();
         for (source, _target) in out_edges {
             new_outgoing.push( (*source, 0x1) );
         }
@@ -585,13 +589,13 @@ impl /*<NodeId>*/ VirtualAddressGraph/*<NodeId>*/ {
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
 // NOTE: there is a topologiccal sort in petgraph - but it is DFS based
 
-impl petgraph::visit::GraphBase for VirtualAddressGraph {
-    type NodeId = u64;
-    type EdgeId = (u64, u64);
+impl<N> petgraph::visit::GraphBase for VirtualAddressGraph<N> {
+    type NodeId = N;
+    type EdgeId = (N, N);
 }
 
 
-impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph {
+impl<'a, N> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph<N> {
     type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
 
     fn node_identifiers(self) -> Self::NodeIdentifiers {
@@ -599,7 +603,7 @@ impl<'a> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph {
     }
 }
 
-impl<'a> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph {
+impl<'a, N> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph<N> {
     type Neighbors = impl Iterator<Item = Self::NodeId> + 'a;
 
     fn neighbors(self, a: Self::NodeId) -> Self::Neighbors {
@@ -614,7 +618,7 @@ impl<'a> petgraph::visit::IntoNeighbors for &'a VirtualAddressGraph {
     }
 }
 
-impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
+impl<'a, N> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph<N> {
 
     fn node_bound(&self) -> usize {
         self.nodes().len()
@@ -634,7 +638,7 @@ impl<'a> petgraph::visit::NodeIndexable for &'a VirtualAddressGraph {
 
 }
 
-impl petgraph::visit::Visitable for VirtualAddressGraph {
+impl<N> petgraph::visit::Visitable for VirtualAddressGraph<N> {
     type Map = HashSet<Self::NodeId>;
 
     fn visit_map(&self) -> Self::Map {
@@ -651,9 +655,9 @@ impl petgraph::visit::Visitable for VirtualAddressGraph {
 // package: dots
 // for .dot and hence .svg plot
 
-impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
-    type Node = u64;
-    type Edge = (u64, u64);
+impl<'a, N> dot2::Labeller<'a> for VirtualAddressGraph<N> {
+    type Node = N;
+    type Edge = (N, N);
     type Subgraph = ();
 
     // .dot compatible identifier naming the graph
@@ -683,9 +687,9 @@ impl<'a> dot2::Labeller<'a> for VirtualAddressGraph {
 }
 
 
-impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
-    type Node = u64;
-    type Edge = (u64, u64);
+impl<'a, N> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
+    type Node = N;
+    type Edge = (N, N);
     type Subgraph = ();
 
     // all nodes of the graph
@@ -696,7 +700,7 @@ impl<'a> dot2::GraphWalk<'a> for VirtualAddressGraph {
     // all edges of the graph
     fn edges(&'a self) -> dot2::Edges<'a, Self::Edge> {
 
-        let mut edges: Vec<(u64, u64)> = Vec::new();
+        let mut edges: Vec<(N, N)> = Vec::new();
 
         for block in self.nodes() {
             let source = block.address();
