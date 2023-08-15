@@ -1,6 +1,6 @@
 
-use std::fmt::Display;
-use std::hash::Hash;
+// use std::fmt::Display;
+// use std::hash::Hash;
 
 use std::collections::HashSet;
 use petgraph::algo::tarjan_scc;
@@ -9,34 +9,28 @@ use crate::vagraph::vag::*;
 
 
 #[derive(Debug)]
-pub struct Component<'a, N> 
-where
-    N: Copy + Eq + Display + Hash + Ord,
-{
+pub struct Component<'a, N: VAGNodeId> {
     // the original graph
     graph: &'a VirtualAddressGraph<N>,
     // the strongly connected component
-    component: HashSet<N>,
+    component: HashSet<Vertex<N>>,
 }
 
-impl<'a, N> Component<'a, N> 
-where
-    N: Copy + Eq + Display + Hash + Ord,
-{
+impl<'a, N: VAGNodeId> Component<'a, N> {
     // given a VAG instance returns a vector of its components
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Vec<Self> {
 
         let mut components: Vec<Self> = Vec::new();
 
         // tarjan_scc -> vector of strongly connected component's addresses vector
-        let scc: Vec<Vec<N>> = tarjan_scc(vag);
+        let scc: Vec<Vec<Vertex<N>>> = tarjan_scc(vag);
 
         for comp in scc {
-            let mut strongly: HashSet<N> = HashSet::new();
+            let mut strongly: HashSet<Vertex<N>> = HashSet::new();
             for node in comp {
                 // TODO: if let not ??
                 match strongly.insert(node) {
-                    false => println!("the node {} is already in", node),
+                    false => println!("the node {:x?} is already in", node),
                     true => (),
                 }
             }
@@ -59,13 +53,15 @@ where
     }
 
     // returns the collection of nodes in the strongly connnected component
-    fn nodes(&self) -> &HashSet<N> {
+    fn nodes(&self) -> &HashSet<Vertex<N>> {
         &self.component
     }
 
     // checks if a given node is in the component
-    fn contains(&self, node: N) -> bool {
-        self.nodes().contains(&node)
+    fn contains(&self, node: Vertex<N>) -> bool {
+        self
+            .nodes()
+            .contains(&node)
     }
 
     // checks if a component is trivial, i.e. it's a single node
@@ -74,19 +70,24 @@ where
     }
 
     // returns a reference to the targets of a given vertex in the component
-    fn targets(&self, node: N) -> &[N] {
-        self.whole().node_at_target(node).targets()
+    fn targets(&self, node: Vertex<N>) -> &HashSet<Vertex<N>> {
+        self
+            .whole()
+            .node_at_target(node)
+            .targets()
     }
+
+    // TBC!!
 
     // a collection of incoming edges
     // TODO: HashSet or Vector ??
-    fn incoming_edges(&self) -> Vec<(N, N)> {
+    fn incoming_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
 
-        let mut incoming: Vec<(N, N)> = Vec::new();
+        let mut incoming: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
         for node in self.nodes() {
 
-            for block in self.whole().nodes() {
+            for (source, block) in self.whole().nodes() {
                 for target in block.targets() {
                     if target == node && !self.contains(block.address()) {
                         incoming.push((block.address(), *node))
@@ -98,7 +99,7 @@ where
 
         // sorted by source and then target
         // TODO: is it really needed?
-        incoming.sort_by_key(|item| (item.0, item.0) );
+        // incoming.sort_by_key(|item| (item.0, item.0) );
         incoming
 
     }

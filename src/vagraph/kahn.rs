@@ -10,18 +10,14 @@ use std::hash::Hash;
 
 
 #[derive(Debug)]
-struct KahnBasicBlock<'a, N: VAGNodeId>
-{
+struct KahnBasicBlock<'a, N: VAGNodeId> {
     block: &'a NoInstrBasicBlock<N>,
     // how many of the incoming edges are deleted so far
     // this field will be modified during the weighted Kahn's algorithm
     deleted: usize,
 }
 
-impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N>
-where
-    N: Copy + Eq + Display + Hash + Ord,
-{
+impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N> {
     fn address(&self) -> N {
         self.block.address()
     }
@@ -61,18 +57,12 @@ where
 
 
 #[derive(Debug)]
-pub struct KahnGraph<'a, N>
-where
-    N: Copy + Eq + Display + Hash + Ord,
-{
+pub struct KahnGraph<'a, N: VAGNodeId> {
     address: N,
     nodes: Vec<KahnBasicBlock<'a, N>>,
 }
 
-impl<'a, N> KahnGraph<'a, N> 
-where
-    N: Copy + Eq + Display + Hash + Ord,
-{
+impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
     // generates a KahnGraph instance from a VAG
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Self {
 
