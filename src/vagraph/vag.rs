@@ -22,7 +22,9 @@ impl<T: Copy + Eq + Debug + Display + Hash + Ord + LowerHex> VAGNodeId for T {}
 
 // at some point we would like to use phantom source and target nodes
 // to do so - with generic types - we need to introduce an enum with 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+// note:    no traits are implemented by hand, hence considering the Ord, PartialOrd traits
+//          the order of the variants IS IMPORTANT
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Vertex<N: VAGNodeId> {
     Source,
     Id(N),
@@ -44,6 +46,7 @@ impl<N: VAGNodeId> Vertex<N> {
 ///////////////////// TRAITS for Vertex /////////////////////////
 
 // PartialOrd, Ord ??
+/*
 impl<N: VAGNodeId> PartialOrd for Vertex<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -65,6 +68,7 @@ impl<N: VAGNodeId> Ord for Vertex<N> {
         }
     }
 }
+*/
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -596,7 +600,14 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         if !(is_cyclic_directed(self)) {
             // Kahn's algorithm
             let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(self);
-            kahngraph.kahn_algorithm()
+            // if there is no directed cycle in the graph, then we only have Vertex::Id variants
+            kahngraph
+                .kahn_algorithm()
+                .iter()
+                .map(|x| x.id().unwrap())
+                .collect()
+            // let topsort: Vec<N> = sort.iter().map(|x| x.id().unwrap()).collect();
+            // topsort
 
         } else {
             // collapse the strongly connected components into single vertices
@@ -610,7 +621,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             let components: Vec<Component<N>> = Component::from_vag(self);
 
             // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
-            let mut ordered_components: Vec<Vec<N>> = Vec::new();
+            let mut ordered_components: Vec<Vec<Vertex<N>>> = Vec::new();
 
             for comp in components {
                 // if the component is trivial (i.e. single vertex) -> do nothing
@@ -620,7 +631,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
                     // Kahn's algorithm for the given component
                     let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&comp_vag);
-                    let mut ord_comp: Vec<N> = kahngraph.kahn_algorithm();
+                    let mut ord_comp: Vec<Vertex<N>> = kahngraph.kahn_algorithm();
 
                     // delete the auxiliary nodes from the order
                     // in theory, they must be the first (0x0) and the last (0x1) in the order
@@ -632,6 +643,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             }
 
             // insert the inside orders of the components in the ordered components list
+            // note: the Vertex enum wrap is not needed anymore 
             let mut topsort: Vec<N> = Vec::new();
 
             // TODO: use somehow the component's ids
@@ -642,11 +654,11 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     Some(pos) => {
                         let mut component = ordered_components.remove(pos);
                         while let Some(node) = component.pop() {
-                            topsort.push(node);
+                            topsort.push(node.id().unwrap());
                         }
                     }
                     None => {
-                        topsort.push(id);
+                        topsort.push(id.id().unwrap());
                     }
                 }
             }
