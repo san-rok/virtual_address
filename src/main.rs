@@ -47,8 +47,12 @@ fn main() {
 
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
-    let vags: Vec<VirtualAddressGraph<u64>> = serde_yaml::from_reader(file).unwrap();
+    let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
+    // let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
 
+    // TBC !!!
+
+    /*
     /*
     let mut test_vag = vags.iter_mut().find(|x| x.address() == 0x1845beec0).unwrap();
     // let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/test_vag.dot").unwrap();
@@ -151,6 +155,7 @@ fn main() {
 
     println!("number of times topsort is better: {}", better_cost);
 
+     */
 
 }
 
@@ -220,5 +225,8 @@ fn sort<G>(g: G) -> Vec<G::NodeId>
     vag.weighted_order()
 
 }
+
+
+
 
 

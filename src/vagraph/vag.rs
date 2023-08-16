@@ -868,3 +868,63 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
 
 
 ////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize)]
+pub struct UnwrappedBasicBlock<N: VAGNodeId> {
+    address: N,
+    len: usize,
+    targets: Vec<N>,
+    indegree: usize,
+}
+
+impl<N: VAGNodeId> UnwrappedBasicBlock<N> {
+
+    fn address(&self) -> N {
+        self.address
+    }
+
+    pub fn to_nibb(&self) -> NoInstrBasicBlock<N> {
+
+        NoInstrBasicBlock{ 
+            address: Vertex::Id(self.address), 
+            len: self.len, 
+            targets: self.targets.iter().map(|&x| Vertex::Id(x)).collect(), 
+            indegree: self.indegree, 
+        }
+
+    }
+
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UnwrappedVAGraph<N: VAGNodeId> {
+    address: N,
+    nodes: Vec<UnwrappedBasicBlock<N>>,
+}
+
+impl<N: VAGNodeId> UnwrappedVAGraph<N> {
+
+    fn nodes(&self) -> &[UnwrappedBasicBlock<N>] {
+        &self.nodes
+    }
+
+    pub fn to_vag(&self) -> VirtualAddressGraph<N> {
+
+        let mut wrappednodes: HashMap<Vertex<N>, NoInstrBasicBlock<N>> = HashMap::new();
+
+        for block in self.nodes() {
+            wrappednodes.insert(
+                Vertex::Id(block.address()),
+                block.to_nibb(),
+            );
+        }
+
+
+        VirtualAddressGraph { 
+            address: Vertex::Id(self.address), 
+            nodes: wrappednodes,
+        }
+
+    }
+
+}
