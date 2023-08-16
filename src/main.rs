@@ -35,14 +35,15 @@ fn main() {
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
-    // let vag: VirtualAddressGraph = VirtualAddressGraph::from_cfg(&cfg);
+    /*
+    let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::from_cfg(&cfg);
 
-    // let _topsort = vag.weighted_order();
-    // println!("{:x?}", topsort);
+    let topsort = vag.weighted_order();
+    println!("{:x?}", topsort);
 
-
+    println!("cost of order: {}", vag.cost_of_order(topsort));
+    */
     
-
 
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
@@ -97,12 +98,12 @@ fn main() {
         // let topsort = kahngraph.kahn_algorithm();
 
         let mut initial_order: Vec<u64> = Vec::new();
-        for node in vag.nodes() {
-            initial_order.push(node.address());
+        for (node, _) in vag.nodes() {
+            initial_order.push(node.id().unwrap());
         }
         initial_order.sort();
 
-        println!("starting block's address: {:x}", vag.address());
+        println!("starting block's address: {:x}", vag.address().id().unwrap());
 
         // println!("initial number of nodes {}", initial_order.len());
         // println!("ordered number of nodes {}", topsort.len());
@@ -162,14 +163,22 @@ use std::hash::Hash;
 
 use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoEdgesDirected, GraphBase};
 
+// use petgraph::visit::NodeRef;
+
 use std::collections::HashMap;
 
+
+pub trait NodeWeight {
+    type Node; 
+    fn weight(&self, node: Self::Node) -> usize;
+}
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
 fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId> 
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected, 
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected +
+            NodeWeight<Node = G::NodeId>,
         <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
 {
 
@@ -180,7 +189,8 @@ fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
             Vertex::Id(block),
             NoInstrBasicBlock::<G::NodeId>::new(
                 Vertex::Id(block), 
-                0, 
+                // NOT CORRECT YET! what about the length - this is just a vertex weight
+                g.weight(block), 
                 g.neighbors(block).map(|x| Vertex::Id(x)).collect(),
                 g.edges_directed(block, petgraph::Direction::Incoming).count(),
             )
@@ -197,3 +207,18 @@ fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
     vag
 
 }
+
+
+fn sort<G>(g: G) -> Vec<G::NodeId> 
+    where
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected + 
+            NodeWeight<Node = G::NodeId>,
+        <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex, 
+{
+
+    let vag: VirtualAddressGraph<G::NodeId> = to_vag(g);
+    vag.weighted_order()
+
+}
+
+
