@@ -18,7 +18,7 @@ use crate::vagraph::vag::*;
 
 
 use kendalls::tau_b;
-use petgraph::visit::IntoNodeIdentifiers;
+// use petgraph::visit::IntoNodeIdentifiers;
 
 
 fn main() {
@@ -46,7 +46,7 @@ fn main() {
 
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
-    let vags: Vec<VirtualAddressGraph> = serde_yaml::from_reader(file).unwrap();
+    let vags: Vec<VirtualAddressGraph<u64>> = serde_yaml::from_reader(file).unwrap();
 
     /*
     let mut test_vag = vags.iter_mut().find(|x| x.address() == 0x1845beec0).unwrap();
@@ -157,31 +157,40 @@ fn main() {
 
 // generic functions
 
+use std::fmt::{Debug, Display, LowerHex};
+use std::hash::Hash;
+
+use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoEdgesDirected, GraphBase};
+
+use std::collections::HashMap;
+
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
-fn to_vag<G>(g: G) -> VirtualAddressGraph<NodeId> 
+fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId> 
     where
-        G:  petgraph::visit::IntoNodeIdentifiers<NodeId = u64, EdgeId = (u64, u64)> +
-            petgraph::visit::IntoNeighbors<Neighbors = Vec<u64>> + // how to use NodeId here?
-            petgraph::visit::NodeIndexable +
-            petgraph::visit::IntoEdgesDirected<EdgesDirected = Vec<u64>>,
-        // <G as GraphRef>::NodeId: Eq + std::hash::Hash,
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected, 
+        <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
 {
 
-    let mut nodes: Vec<NoInstrBasicBlock/*<G::NodeId>*/> = Vec::new();
+    let mut nodes: HashMap<Vertex<G::NodeId>, NoInstrBasicBlock<G::NodeId>> = HashMap::new();
 
     for block in g.node_identifiers() {
-        nodes.push( NoInstrBasicBlock::new(
-            block, 0, g.neighbors(block), g.edges_directed(block, petgraph::Direction::Incoming).len()
+        nodes.insert( 
+            Vertex::Id(block),
+            NoInstrBasicBlock::<G::NodeId>::new(
+                Vertex::Id(block), 
+                0, 
+                g.neighbors(block).map(|x| Vertex::Id(x)).collect(),
+                g.edges_directed(block, petgraph::Direction::Incoming).count(),
             )
         );
     }
 
-    nodes.sort_by_key(|node| node.address());
+    // nodes.sort_by_key(|node| node.address());
 
-    let vag: VirtualAddressGraph = VirtualAddressGraph::new(
-        nodes[0].address(),
+    let vag: VirtualAddressGraph<G::NodeId> = VirtualAddressGraph::new(
+        *nodes.iter().map(|(x,_)| x).min().unwrap(),
         nodes,
     );
 
