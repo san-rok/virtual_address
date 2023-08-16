@@ -121,9 +121,12 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
     */
 
     // a mutable reference for the block at given target
-    fn node_at_target_mut(&mut self, target: Vertex<N>) -> &mut KahnBasicBlock<'a, N> {
+    fn node_at_target_mut(&mut self, target: &Vertex<N>) -> &mut KahnBasicBlock<'a, N> {
 
-        &mut self.nodes_mut().get_mut(&target).unwrap()
+        self
+            .nodes_mut()
+            .get_mut(target)
+            .unwrap()
 
         // let pos = self.position(target);
         // &mut self.nodes_mut()[pos]
@@ -134,7 +137,7 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
     // note:    the nummber of deleted edges are counted in the KBB.deleted field
     //          if the deleted == indegree -> the vertex lost all of its incoming edges
     //          hence popped for a possible next vertex for the iteration
-    fn reduce_indegree(&mut self, target: Vertex<N>) -> Option<&'a NoInstrBasicBlock<N>> {
+    fn reduce_indegree(&mut self, target: &Vertex<N>) -> Option<&'a NoInstrBasicBlock<N>> {
         let kbb = self.node_at_target_mut(target);
         
         kbb.recude_by_one();
@@ -178,7 +181,7 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
             // reduce the in-degrees of the actual vertex's target(s)
             for target in node.targets() {
 
-                if let Some(block) = self.reduce_indegree(*target) {
+                if let Some(block) = self.reduce_indegree(target) {
                     visit.push(block);
                 }
             }

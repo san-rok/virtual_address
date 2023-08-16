@@ -33,7 +33,7 @@ pub enum Vertex<N: VAGNodeId> {
 
 impl<N: VAGNodeId> Vertex<N> {
 
-    fn id(&self) -> Result<N, &str> {
+    pub fn id(&self) -> Result<N, &str> {
         match self {
             Vertex::Source => Err("phantom source node"),
             Vertex::Target => Err("phantom target node"),
@@ -41,11 +41,6 @@ impl<N: VAGNodeId> Vertex<N> {
         }
     }
 
-    /*
-    fn from_id(id: N) -> Self {
-        Vertex::Id(id)
-    }
-    */
 } 
 
 ///////////////////// TRAITS for Vertex /////////////////////////
