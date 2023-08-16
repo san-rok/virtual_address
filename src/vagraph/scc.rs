@@ -2,7 +2,7 @@
 // use std::fmt::Display;
 // use std::hash::Hash;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use petgraph::algo::tarjan_scc;
 
 use crate::vagraph::vag::*;
@@ -85,17 +85,26 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
         let mut incoming: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
+        for (&source, block) in 
+                self.whole().nodes().iter().filter(|(&x,_)| !self.contains(x)) {
+            for &target in 
+                    block.targets().iter().filter(|&x| self.contains(*x)) {        
+                incoming.push((source, target));
+            }
+        }
+
+        /*
         for node in self.nodes() {
 
             for (source, block) in self.whole().nodes() {
                 for target in block.targets() {
-                    if target == node && !self.contains(block.address()) {
-                        incoming.push((block.address(), *node))
+                    if target == node && !self.contains(*source) {
+                        incoming.push((*source, *node))
                     }
                 }
             }
-
         }
+        */
 
         // sorted by source and then target
         // TODO: is it really needed?
@@ -106,9 +115,9 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
     // a collection of outgoing edges
     // TODO: HashSet or Vector ??
-    fn outgoing_edges(&self) -> Vec<(N, N)> {
+    fn outgoing_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
 
-        let mut outgoing: Vec<(N, N)> = Vec::new();
+        let mut outgoing: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
         for &node in self.nodes() {
             for &target in self.targets(node) {
@@ -119,7 +128,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
         }
 
         // sorted by source and then target
-        outgoing.sort_by_key(|item| (item.0, item.0) );
+        // outgoing.sort_by_key(|item| (item.0, item.0) );
         outgoing
 
     }
@@ -132,31 +141,27 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
         let address = self.nodes().iter().min().unwrap();
 
-        let mut nodes: Vec<NoInstrBasicBlock<N>> = Vec::new();
+        let mut nodes: HashMap<Vertex<N>, NoInstrBasicBlock<N>> = HashMap::new();
         for node in self.nodes() {
             // TODO: do this without clone()
             // MAYBE: rewrite the whole Kahn's algorithm to accept avoided edges, vertices, etc.
-            nodes.push(self.whole().node_at_target(*node).clone());
+            nodes.insert(
+                *node,
+                self.whole().node_at_target(*node).clone()
+            );
         }
 
         let mut vag: VirtualAddressGraph<N> = VirtualAddressGraph::new(*address, nodes);
         
-        // let backs = vag.backedges();
-        // for (s, t) in backs {
-        //     println!("{} --> {}",s, t);
-        // }
-        // vag.erase_edges(&backs);
-
-
-        
-        let ins: Vec<(N, N)> = self.incoming_edges();
-        let outs: Vec<(N, N)> = self.outgoing_edges();
+        let ins: Vec<(Vertex<N>, Vertex<N>)> = self.incoming_edges();
+        let outs: Vec<(Vertex<N>, Vertex<N>)> = self.outgoing_edges();
 
         vag.add_source_vertex(&ins);
         vag.add_target_vertex(&outs);
 
         let backs = vag.backedges();
 
+        // this edge erasing won't modify the indegrees -> it is a must to do that in the next line
         vag.erase_edges(&backs);
 
         // TODO: update the indegrees at the place of modification!!

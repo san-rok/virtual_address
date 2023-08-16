@@ -66,7 +66,7 @@ impl<N: VAGNodeId> Ord for Vertex<N> {
     }
 }
 
-
+/////////////////////////////////////////////////////////////////////////
 
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -508,6 +508,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     // erase the given edge from the VAG
     // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
     //       in add_target_vertex() method, hence no indegree modification is necessary
+    // note: the above remark is not true - e.g. see to_acyclic_vag() method; however the indegrees are updated there
     fn erase_edge(&mut self, edge: (Vertex<N>, Vertex<N>)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
     }
