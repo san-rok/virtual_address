@@ -41,6 +41,11 @@ impl<N: VAGNodeId> Vertex<N> {
         }
     }
 
+    /*
+    fn from_id(id: N) -> Self {
+        Vertex::Id(id)
+    }
+    */
 } 
 
 ///////////////////// TRAITS for Vertex /////////////////////////
@@ -695,7 +700,8 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
 impl<N: VAGNodeId> petgraph::visit::GraphBase for VirtualAddressGraph<N> {
     type NodeId = Vertex<N>;
-    type EdgeId = (Vertex<N>, Vertex<N>);
+    // type EdgeId = (Vertex<N>, Vertex<N>);
+    type EdgeId = (Self::NodeId, Self::NodeId);
 }
 
 
