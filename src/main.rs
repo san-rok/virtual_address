@@ -46,7 +46,7 @@ fn main() {
     println!("cost of order: {}", vag.cost_of_order(topsort));
     
 
-    /*
+
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
     let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
@@ -94,10 +94,12 @@ fn main() {
 
     let mut better_cost = 0;
 
-    for mut vag in vags {
-        vag.update_in_degrees();
+    for /* mut */ vag in vags {
+        // vag.update_in_degrees();
 
-        let topsort = vag.weighted_order();
+        // let topsort = vag.weighted_order();
+        let topsort = sort(&vag);
+        let topsort: Vec<u64> = topsort.iter().map(|&x| x.id().unwrap()).collect();
 
         // let mut kahngraph: KahnGraph = KahnGraph::from_vag(&dag);
         // let topsort = kahngraph.kahn_algorithm();
@@ -156,8 +158,6 @@ fn main() {
 
     println!("number of times topsort is better: {}", better_cost);
 
-    */
-
 }
 
 
@@ -167,7 +167,7 @@ fn main() {
 use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
 
-use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoEdgesDirected, GraphBase};
+use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoNeighborsDirected, GraphBase};
 
 // use petgraph::visit::NodeRef;
 
@@ -183,7 +183,7 @@ pub trait NodeWeight {
 
 fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId> 
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected +
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
             NodeWeight<Node = G::NodeId>,
         <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
 {
@@ -198,7 +198,7 @@ fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
                 // NOT CORRECT YET! what about the length - this is just a vertex weight
                 g.weight(block), 
                 g.neighbors(block).map(|x| Vertex::Id(x)).collect(),
-                g.edges_directed(block, petgraph::Direction::Incoming).count(),
+                g.neighbors_directed(block, petgraph::Direction::Incoming).count(),
             )
         );
     }
@@ -217,7 +217,7 @@ fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
 
 fn sort<G>(g: G) -> Vec<G::NodeId> 
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoEdgesDirected + 
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + 
             NodeWeight<Node = G::NodeId>,
         <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex, 
 {

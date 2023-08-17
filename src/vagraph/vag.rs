@@ -9,6 +9,7 @@ use crate::vagraph::scc::*;
 use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
 
+// use petgraph::Direction::Incoming;
 use serde::{Serialize, Deserialize};
 
 use petgraph::algo::{is_cyclic_directed, tarjan_scc};
@@ -96,6 +97,7 @@ impl<N: VAGNodeId> Ord for Vertex<N> {
 
 /////////////////////////////////////////////////////////////////////////
 
+// TODO: safe more info about the node - e.g.: incoming neighbors
 // in the ordering of the block only the number of instructions matter
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NoInstrBasicBlock<N: VAGNodeId>
@@ -241,7 +243,7 @@ impl<N: VAGNodeId> Ord for NoInstrBasicBlock<N> {
 //////////////////////////////////////////////////////////////////////////////////
 
 // almost the same as ControlFlowGraph but with NoInstrBasicBlock structs
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VirtualAddressGraph<N: VAGNodeId> {
     // start: N - TODO!
     address: Vertex<N>,
@@ -715,14 +717,13 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 // for graph algorithms and traversal
 
 // for Tarjan's scc to work we need the following traits to be implemented for VAG
-// NOTE: there is a topologiccal sort in petgraph - but it is DFS based
+// NOTE: there is a topological sort in petgraph - but it is DFS based
 
 impl<N: VAGNodeId> petgraph::visit::GraphBase for VirtualAddressGraph<N> {
     type NodeId = Vertex<N>;
     // type EdgeId = (Vertex<N>, Vertex<N>);
     type EdgeId = (Self::NodeId, Self::NodeId);
 }
-
 
 impl<'a, N: VAGNodeId> petgraph::visit::IntoNodeIdentifiers for &'a VirtualAddressGraph<N> {
     type NodeIdentifiers = impl Iterator<Item = Self::NodeId> + 'a;
@@ -802,6 +803,39 @@ impl<N: VAGNodeId> petgraph::visit::Visitable for VirtualAddressGraph<N> {
         map.clear()
     }
 }
+
+use either::*;
+
+impl<'a, N: VAGNodeId> petgraph::visit::IntoNeighborsDirected for &'a VirtualAddressGraph<N> {
+    type NeighborsDirected = impl Iterator<Item = Self::NodeId> + 'a;
+
+    fn neighbors_directed(self, n: Self::NodeId, d: petgraph::Direction) -> Self::NeighborsDirected {
+        match d {
+            petgraph::Direction::Outgoing => {
+                Left(
+                self
+                    .node_at_target(n)
+                    .targets()
+                    .iter()
+                    .copied()
+                )
+            }
+            petgraph::Direction::Incoming => {
+                Right(
+                self
+                    .nodes()
+                    .iter()
+                    .filter(move |(_, block)| block.targets().contains(&n))
+                    .map(|(&x,_)| x)
+                )
+            
+                
+            }
+        }
+    }
+
+} 
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 
