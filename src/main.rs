@@ -35,24 +35,25 @@ fn main() {
     cfg.render_to(&mut f).unwrap();
     // dot -Tsvg virtual_address.dot > virtual_address.svg
 
-    /*
     let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::from_cfg(&cfg);
 
-    let topsort = vag.weighted_order();
+    let topsort = sort(&vag);
+
+    // let topsort = vag.weighted_order();
     println!("{:x?}", topsort);
 
+    let topsort: Vec<u64> = topsort.iter().map(|&x| x.id().unwrap()).collect();
     println!("cost of order: {}", vag.cost_of_order(topsort));
-    */
     
 
+    /*
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
     let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
-    // let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
+    let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
 
     // TBC !!!
 
-    /*
     /*
     let mut test_vag = vags.iter_mut().find(|x| x.address() == 0x1845beec0).unwrap();
     // let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/test_vag.dot").unwrap();
@@ -155,7 +156,7 @@ fn main() {
 
     println!("number of times topsort is better: {}", better_cost);
 
-     */
+    */
 
 }
 

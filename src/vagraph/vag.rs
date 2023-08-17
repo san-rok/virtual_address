@@ -2,7 +2,7 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, HashSet, HashMap};
 
-use crate::cfg::*;
+use crate::{cfg::*, NodeWeight};
 use crate::vagraph::kahn::*;
 use crate::vagraph::scc::*;
 
@@ -35,15 +35,39 @@ impl<N: VAGNodeId> Vertex<N> {
 
     pub fn id(&self) -> Result<N, &str> {
         match self {
-            Vertex::Source => Err("phantom source node"),
-            Vertex::Target => Err("phantom target node"),
-            Vertex::Id(node) => Ok(*node),
+            Self::Source => Err("phantom source node"),
+            Self::Target => Err("phantom target node"),
+            Self::Id(node) => Ok(*node),
         }
     }
 
 } 
 
 ///////////////////// TRAITS for Vertex /////////////////////////
+
+// display (it is needed for the test only)
+
+impl<N: VAGNodeId> Display for Vertex<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Source => write!(f, "Source"),
+            Self::Target => write!(f, "Target"),
+            Self::Id(node) => write!(f, "{:x}", node),
+        }
+    }
+}
+
+// lowerhex (it is needed for the test only)
+
+impl<N: VAGNodeId> LowerHex for Vertex<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Source => write!(f, "Source"),
+            Self::Target => write!(f, "Target"),
+            Self::Id(node) => LowerHex::fmt(node, f),
+        }
+    }
+}
 
 // PartialOrd, Ord ??
 /*
@@ -866,6 +890,19 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
 
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+
+// trait: NodeWeight  
+// for obtaining the node weights
+
+impl<N: VAGNodeId> NodeWeight for &VirtualAddressGraph<N> {
+    type Node = Vertex<N>;
+
+    fn weight(&self, node: Self::Node) -> usize {
+        self.node_at_target(node).len()
+    }
+
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 

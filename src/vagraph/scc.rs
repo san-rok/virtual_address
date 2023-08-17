@@ -30,7 +30,8 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
             for node in comp {
                 // TODO: if let not ??
                 match strongly.insert(node) {
-                    false => println!("the node {:x?} is already in", node),
+                    // when we read a vag into components: no phantom Source and Target vertices
+                    false => println!("the node {:x?} is already in", node.id().unwrap()),
                     true => (),
                 }
             }
