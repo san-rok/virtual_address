@@ -18,9 +18,11 @@ struct KahnBasicBlock<'a, N: VAGNodeId> {
 }
 
 impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N> {
+    /*
     fn address(&self) -> Vertex<N> {
         self.block.address()
     }
+    */
 
     fn block(&self) -> &'a NoInstrBasicBlock<N> {
         self.block
@@ -72,7 +74,7 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
             nodes.insert(
                 *node,
                 KahnBasicBlock::<N>{
-                    block: block,
+                    block,
                     deleted: 0,
                 }
             );
@@ -150,7 +152,7 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
 
     // after the Kahn's algorithm is finished it is nice to reset the deleted counters back to 0
     fn no_deleted(&mut self) {
-        for (_, block) in self.nodes_mut() {
+        for block in self.nodes_mut().values_mut() {
             block.set_deleted(0);
         }
     }
@@ -171,7 +173,7 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
 
         // initialization: collect the initially zero in-degree vertices
         // the binary heap orders them by length
-        for (_, kahnblock) in self.nodes() {
+        for kahnblock in self.nodes().values() {
             if kahnblock.indegree() == 0 {
                 visit.push( kahnblock.block());
             }

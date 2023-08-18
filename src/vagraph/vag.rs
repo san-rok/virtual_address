@@ -206,7 +206,7 @@ impl NoInstrBasicBlock<u64> {
         NoInstrBasicBlock::<u64> { 
             address: Vertex::Id(bb.address()),
             len: bb.instructions().len(), 
-            targets: targets,
+            targets,
             indegree: 0_usize,
         }
     }
