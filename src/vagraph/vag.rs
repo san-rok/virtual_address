@@ -8,6 +8,7 @@ use crate::vagraph::scc::*;
 
 use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
+use std::default::Default;
 
 // use petgraph::Direction::Incoming;
 use serde::{Serialize, Deserialize};
@@ -67,6 +68,14 @@ impl<N: VAGNodeId> LowerHex for Vertex<N> {
             Self::Target => write!(f, "Target"),
             Self::Id(node) => LowerHex::fmt(node, f),
         }
+    }
+}
+
+// default (it is needed for cost only)
+// note: the generic type N needs to implement the copy trait
+impl<N: VAGNodeId + Default> Default for Vertex<N> {
+    fn default() -> Self {
+        Vertex::Id( Default::default() )
     }
 }
 
