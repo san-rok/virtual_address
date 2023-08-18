@@ -30,7 +30,7 @@ impl<T: Copy + Eq + Debug + Display + Hash + Ord + LowerHex> VAGNodeId for T {}
 pub enum Vertex<N: VAGNodeId> {
     Source,
     Id(N),
-    Target,
+    Sink,
 }
 
 impl<N: VAGNodeId> Vertex<N> {
@@ -38,7 +38,7 @@ impl<N: VAGNodeId> Vertex<N> {
     pub fn id(&self) -> Result<N, &str> {
         match self {
             Self::Source => Err("phantom source node"),
-            Self::Target => Err("phantom target node"),
+            Self::Sink => Err("phantom sink node"),
             Self::Id(node) => Ok(*node),
         }
     }
@@ -53,7 +53,7 @@ impl<N: VAGNodeId> Display for Vertex<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => write!(f, "Source"),
-            Self::Target => write!(f, "Target"),
+            Self::Sink => write!(f, "Sink"),
             Self::Id(node) => write!(f, "{:x}", node),
         }
     }
@@ -65,7 +65,7 @@ impl<N: VAGNodeId> LowerHex for Vertex<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => write!(f, "Source"),
-            Self::Target => write!(f, "Target"),
+            Self::Sink => write!(f, "Sink"),
             Self::Id(node) => LowerHex::fmt(node, f),
         }
     }
@@ -78,31 +78,6 @@ impl<N: VAGNodeId + Default> Default for Vertex<N> {
         Vertex::Id( Default::default() )
     }
 }
-
-// PartialOrd, Ord ??
-/*
-impl<N: VAGNodeId> PartialOrd for Vertex<N> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<N: VAGNodeId> Ord for Vertex<N> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (Vertex::Source, Vertex::Source) => Ordering::Equal,
-            (Vertex::Source, Vertex::Id(_)) => Ordering::Less,
-            (Vertex::Source, Vertex::Target) => Ordering::Greater,
-            (Vertex::Id(_), Vertex::Source) => Ordering::Greater,
-            (Vertex::Id(a), Vertex::Id(b)) => a.cmp(b),
-            (Vertex::Id(_), Vertex::Target) => Ordering::Less,
-            (Vertex::Target, Vertex::Source) => Ordering::Greater,
-            (Vertex::Target, Vertex::Id(_)) => Ordering::Greater,
-            (Vertex::Target, Vertex::Target) => Ordering::Equal,
-        }
-    }
-}
-*/
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -446,7 +421,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     }
 
 
-    // this method is just an inspector -> no Vertex::{Source, Target} will be presented
+    // this method is just an inspector -> no Vertex::{Source, Sink} will be presented
     // no need to wrap the nodes in the argument into Vertex enum
     pub fn cost_of_order(&self, order: Vec<N>) -> usize {
 
@@ -571,7 +546,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         // with 0 indegree and large length
         self.add_block(
             NoInstrBasicBlock {
-                // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Target} fields
+                // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Sink} fields
                 address: Vertex::Source,
                 len: 99999,
                 targets: in_edges.iter().map(|(_s,t)| *t).collect(),
@@ -599,8 +574,8 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         // with given indegree and small length
         self.add_block(
             NoInstrBasicBlock {
-                // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Target} fields
-                address: Vertex::Target,
+                // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Sink} fields
+                address: Vertex::Sink,
                 len: 0,
                 targets: HashSet::<Vertex<N>>::new(),
                 // at the moment no incoming edges declared
@@ -612,7 +587,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         // the new outgoing edges will have this new vertex as target
         let mut new_outgoing: Vec<(Vertex<N>,Vertex<N>)> = Vec::new();
         for (source, _target) in out_edges {
-            new_outgoing.push( (*source, Vertex::Target) );
+            new_outgoing.push( (*source, Vertex::Sink) );
         }
 
         // add these newly generated edges
@@ -627,7 +602,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
 
     // gets a VAG and returns the "optimal" order of its vertices
-    // the final order won't contain Vertex::{Source, Target}, hence we can unwrap the nodeids
+    // the final order won't contain Vertex::{Source, Sink}, hence we can unwrap the nodeids
     // TODO !!!
     pub fn weighted_order(&self) -> Vec<N> {
         
@@ -671,7 +646,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     // delete the auxiliary nodes from the order
                     // in theory, they must be the first (0x0) and the last (0x1) in the order
                     // NOT CORRECT !!
-                    ord_comp.retain(|&x| x != Vertex::Source && x != Vertex::Target);
+                    ord_comp.retain(|&x| x != Vertex::Source && x != Vertex::Sink);
 
                     ordered_components.push(ord_comp);
                 }
