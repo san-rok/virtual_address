@@ -69,6 +69,8 @@ pub fn bbsort<G>(g: G) -> Vec<G::NodeId>
 
 }
 
+
+// cost of given order 
 pub fn cost<G>(g: G, order: &[G::NodeId]) -> usize
     where
         G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + 
@@ -87,10 +89,10 @@ pub fn cost<G>(g: G, order: &[G::NodeId]) -> usize
 
     println!("starting block's address: {:x}", vag.address().id().unwrap());
 
+    // TODO: legit error handling
     if initial_order.len() != order.len() {
         println!("some blocks are missing!")
     }
-
 
     for i in 0..initial_order.len() {
         println!("{:x}, {:x}", initial_order[i], order[i]);
