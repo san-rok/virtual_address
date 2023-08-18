@@ -90,9 +90,14 @@ pub struct NoInstrBasicBlock<N: VAGNodeId>
     address: Vertex<N>,
     // the number of instructions in the block
     len: usize,
+    // the addresses of block from which we can jump to the current block
+    // that is: sources = all the direct predecessors of the block
+    // note: indegree = #sources !!! (otherwise the block is invalid)
+    sources: HashSet<Vertex<N>>,
     // the addresses of blocks where we will jump next 
+    // that is: targets = all the direct successors of the block
     // note: its length is at most two
-    targets: HashSet<Vertex<N>>, // Vec<N>,
+    targets: HashSet<Vertex<N>>,
     // number of blocks from we jump to here
     indegree: usize,
 }
@@ -100,10 +105,11 @@ pub struct NoInstrBasicBlock<N: VAGNodeId>
 
 impl<N: VAGNodeId> NoInstrBasicBlock<N> {
     // sets an instance
-    pub fn new(address: Vertex<N>, len: usize, targets: HashSet<Vertex<N>>, indegree: usize) -> Self {
+    pub fn new(address: Vertex<N>, len: usize, sources: HashSet<Vertex<N>> ,targets: HashSet<Vertex<N>>, indegree: usize) -> Self {
         NoInstrBasicBlock::<N> { 
             address, 
             len,
+            sources,
             targets,
             indegree,
         }
@@ -119,9 +125,19 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.len
     }
 
-    // a slice of the target blocks' addresses
+    // a hashset reference of target blocks' addresses
     pub fn targets(&self) -> &HashSet<Vertex<N>> {
         &self.targets
+    }
+
+    // a hashset reference of source blocks' addresses
+    pub fn sources(&self) -> &HashSet<Vertex<N>> {
+        &self.sources
+    }
+
+    fn set_sources(&mut self, sources: HashSet<Vertex<N>>) {
+        // takes the union of self.sources and sources
+        self.sources.extend(sources);
     }
 
     // extends the vector of targets by the given address
@@ -135,18 +151,6 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
     // note: we can not modify here the target's indegree !!
     fn erase_target(&mut self, target: Vertex<N>) {
         self.targets.remove(&target);
-
-        /*
-        if let Some(pos) = self.targets().iter().position(|x| x == &target) {
-            self.targets.remove(pos);
-            // as mentioned above: the indegree of the given block does NOT change
-            /*
-            if self.indegree > 0 {
-                self.indegree = self.indegree - 1;
-            }
-            */
-        }
-        */
     }
 
     // the indegree of the block
@@ -164,21 +168,12 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.set_indegree(self.indegree + 1);
     }
 
-    /*
-    // decrease the indegree of the block by 1
-    // if indegree == 0, then to nothing
-    fn decrease_indegree(&mut self) {
-        if self.indegree() > 0 {
-            self.set_indegree(self.indegree - 1);
-        }
-    }
-    */
-
 }
 
 // translates a BasicBlock to NIBB, that is counts the number of instructions
 // TODO: is it any good for that specific choice - BB is my previous "dummy" struct
 // BasicBlock struct - not generic type !!
+// note: BB contains no information about the sourcing addresses -> sources: empty hashset
 impl NoInstrBasicBlock<u64> {
     fn from_bb(bb: &BasicBlock) -> Self{
 
@@ -189,7 +184,8 @@ impl NoInstrBasicBlock<u64> {
 
         NoInstrBasicBlock::<u64> { 
             address: Vertex::Id(bb.address()),
-            len: bb.instructions().len(), 
+            len: bb.instructions().len(),
+            sources: HashSet::<Vertex<u64>>::new(),
             targets,
             indegree: 0_usize,
         }
@@ -276,6 +272,44 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         }
     }
 
+    // returns the list (BTreeMap - sorted by address) of (vertex, sources) pairs of an instance
+    fn sources(&self) -> BTreeMap<Vertex<N>, HashSet<Vertex<N>>> {
+
+        let mut sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = BTreeMap::new();
+
+        for (id, node) in self.nodes() {
+            sources.entry(*id).or_insert( HashSet::<Vertex<N>>::new() );
+
+            for target in node.targets() {
+                sources
+                    .entry(*target)
+                    .and_modify(|s| { 
+                        s.insert(*id); 
+                    } )
+                    .or_insert_with( || {
+                        let mut s: HashSet<Vertex<N>> = HashSet::new();
+                        s.insert(*id);
+                        s
+                    } );
+            }
+        }
+
+        sources
+
+    }
+
+    // MAYBE: this will be deleted later
+    // an extra iteration through the nodes of the graph to update the set of sources of the vertices
+    pub fn update_sources(&mut self) {
+        let sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = self.sources();
+
+        for (id, node) in self.nodes_mut() {
+            node.set_sources( *sources.get(id).unwrap() );
+        }
+    }
+
+
+    // MAYBE: this will be deleted later 
     // returns the list (BTreeMap - sorted by address) of indegrees of an instance
     // TODO: iterating through the elements of HashMap - is it cheap?
     fn in_degrees(&self) -> BTreeMap<Vertex<N>, usize> {
@@ -293,6 +327,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         indeg
     }
 
+    // MAYBE: this will be deleted later
     // an extra iteration through the nodes of the graph to update the indegrees of the vertices
     // maybe there is a more clever/effective way to do this - where one can use the iteration in
     // from_cfg() method to get the indegrees
@@ -305,6 +340,22 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             node.set_indegree( *indeg.get(id).unwrap() );
         }
     }
+
+    // an extra iteration through the nodes of the graph to update the set of sources and
+    // the indegrees of the vertices - simultaneously
+    // it is really pricey in runtime, hence we would like to use it only once
+    // and whenever we modify something locally, then do the update also locally there
+    pub fn update_sources_indegrees(&mut self) {
+        let sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = self.sources();
+
+        for (id, node) in self.nodes_mut() {
+            node.set_sources( *sources.get(id).unwrap() );
+            node.set_indegree( node.sources().len() );
+        }
+
+    }
+
+
 
     // the start virtual address
     pub fn address(&self) -> Vertex<N> {
