@@ -10,6 +10,8 @@ use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
 use std::default::Default;
 
+// use either::*;
+
 // use petgraph::Direction::Incoming;
 use serde::{Serialize, Deserialize};
 
@@ -167,6 +169,7 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
     fn increase_indegree(&mut self) {
         self.set_indegree(self.indegree + 1);
     }
+
 
 }
 
@@ -345,7 +348,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     // the indegrees of the vertices - simultaneously
     // it is really pricey in runtime, hence we would like to use it only once
     // and whenever we modify something locally, then do the update also locally there
-    pub fn update_sources_indegrees(&mut self) {
+    pub fn update_sources_and_indegrees(&mut self) {
         let sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = self.sources();
 
         for (id, node) in self.nodes_mut() {
@@ -406,19 +409,21 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         // the node label for a sc component = first node's label in tarjan's output
         // TODO: this ad hoc choice seems not that good (considering that later the id will be the smallest address)
+        // TODO: let the component's ID be the smallest node id in there
         let mut comp_dict: BTreeMap<Vertex<N>, Vertex<N>> = BTreeMap::new();
         for comp in &scc {
-            let value = comp[0];
+            // the component's ID be the smallest node id in there
+            let value = comp.iter().min().unwrap();
             for node in comp {
-                comp_dict.insert(*node, value);
+                comp_dict.insert(*node, *value);
             }
         }
 
         let mut nodes: HashMap<Vertex<N>, NoInstrBasicBlock<N>> = HashMap::new();
 
         for comp in &scc {
-        
-            let address: Vertex<N> = comp[0];
+            // the component's ID be the smallest node id in there
+            let address: Vertex<N> = *comp.iter().min().unwrap();
             let mut length: usize = 0;
             let mut targets: HashSet<Vertex<N>> = HashSet::new();
 
@@ -426,14 +431,6 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
                 // the block at the given address
                 let node = self.node_at_target(*node);
-                
-                /*
-                let pos = self
-                    .nodes()
-                    .binary_search_by(|block| block.address().cmp(node))
-                    .unwrap();
-                let node = &self.nodes()[pos];
-                */
 
                 length += node.len();
 
@@ -449,15 +446,13 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                 address, 
                 NoInstrBasicBlock::<N> { 
                     address, 
-                    len: length, 
+                    len: length,
+                    sources: HashSet::<Vertex<N>>::new(),
                     targets,
                     indegree: 0_usize,
                 }
             );
         }
-
-        // for later use: sort by address
-        // nodes.sort_by_key(|node| node.address());
 
         let mut vag: VirtualAddressGraph<N> =
         VirtualAddressGraph { 
@@ -465,7 +460,10 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             nodes,
         };
 
-        vag.update_in_degrees();
+        // the information about the vertices coming in the given vertex can not be
+        // derived locally - it seems like a better choice to update this data by an
+        // extra iteration on the condensed graph's nodes
+        vag.update_sources_and_indegrees();
 
         vag
 
@@ -481,31 +479,39 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         let mut cost: usize = 0;
 
         for address in &order {
-
             ordered.push(self.node_at_target(Vertex::Id(*address)));
-            /*
-            let pos = self
-                .nodes()
-                .binary_search_by(|x| x.address().cmp(address))
-                .unwrap();
-            ordered.push(&self.nodes()[pos]);
-            */
         }
 
+        // starting from the first node of the order we iterate through all the vertices
+        // and consider only the outgoing edges (whose are incoming edges for other, no worries)
+        // TODO: if there is a back-and-forth edge between nodes: its weight = 0, which is not correct
         for (pos01, block) in ordered.iter().enumerate() {
             for target in block.targets() {
                 let mut edge_weight: usize = 0;
                 
-                // the given order can be any arbitrary
+                // the given order can be any arbitrary, hence there is no binary search
                 let pos02: usize = order
                     .iter()
                     .position(|&x| Vertex::Id(x) == *target)
                     .unwrap();
 
-                // loops would result in invalid range
-                if pos01 != pos02 {
-                    for node in &ordered[min(pos01, pos02)+1 .. max(pos01, pos02)] {
-                        edge_weight += node.len();
+                // note: an edge goes from the last instruction of a block to the first instruction of the other block
+                match pos01.cmp(&pos02) {
+                    // edge goes forward: pos01 and pos02 are not counted
+                    Ordering::Less => {
+                        for node in &ordered[pos01+1..pos02] {
+                            edge_weight += node.len();
+                        }
+                    }
+                    // edge goes backward: pos01 and pos02 are counted
+                    Ordering::Greater => {
+                        for node in &ordered[pos02..=pos01] {
+                            edge_weight += node.len();
+                        }
+                    }
+                    // loop edge: length of the given node (same as the target)
+                    Ordering::Equal => {
+                        edge_weight = block.len();
                     }
                 }
 
@@ -534,81 +540,32 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     }
 
 
-    // add a new node to the existing list of nodes
-    // note: the way we use this - no indegree modification is needed for the targets
-    fn add_block(&mut self, node: NoInstrBasicBlock<N>) {
-
-        // the new edges modify the indegrees of the targets
-        /*
-        for target in node.targets() {
-            self.node_at_target_mut(*target).increase_indegree();
-        }
-        */
-
+    // add a new node to the existing list of nodes, without global updates on the graph
+    // note: the necessary global updated is needed to be done at the place of modification
+    fn add_block_without_update(&mut self, node: NoInstrBasicBlock<N>) {
         // add the new node to the graph
         self.nodes.insert(node.address(), node);
-
-        // the nodes are sorted by address
-        // self.nodes_mut().sort_by_key(|x| x.address());
-    }
-
-
-    // add the given edge to the VAG: between EXISTING blocks
-    fn add_edge(&mut self, edge: (Vertex<N>, Vertex<N>)) {
-        self.node_at_target_mut(edge.0).add_target(edge.1);
-
-        // increase the indegree of the target block
-        self.node_at_target_mut(edge.1).increase_indegree();
-    }
-
-    // add the given edges to the VAG
-    // note: the edges vec<(N, N)> needs to be ordered
-    fn add_edges(&mut self, edges: &[(Vertex<N>,Vertex<N>)]) {
-        // TODO: optimalize !!
-        for &edge in edges {
-            self.add_edge(edge);
-        }
-    }
-
-    // erase the given edge from the VAG
-    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
-    //       in add_target_vertex() method, hence no indegree modification is necessary
-    // note: the above remark is not true - e.g. see to_acyclic_vag() method; however the indegrees are updated there
-    fn erase_edge(&mut self, edge: (Vertex<N>, Vertex<N>)) {
-        self.node_at_target_mut(edge.0).erase_target(edge.1);
-    }
-
-    // erase the given edges to the VAG
-    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
-    //       in add_target_vertex() method, hence no indegree modification is necessary
-    // note: used only when phantom target is added to the graph hence the indegree update is there
-    pub fn erase_edges(&mut self, edges: &[(Vertex<N>, Vertex<N>)])  {
-        // TODO: optimalize !!
-        for &edge in edges {
-            self.erase_edge(edge);
-        }
     }
 
     // given the list of incoming edges: merge their sources into one new vertex
+    // TODO: error handling
+    // since the source of the incoming edges is not in the VAG - we don't have to delete anything
     pub fn add_source_vertex(&mut self, in_edges: &[(Vertex<N>, Vertex<N>)]) {
-        // since the source of the incoming edges is not in the VAG - we don't have to delete anything
-
         // the sources of these edges then are merged into one vertex
-        // with 0 indegree and large length
-        self.add_block(
+        // with 0 indegree, empty sources hashset and large length
+        self.add_block_without_update(
             NoInstrBasicBlock {
                 // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Sink} fields
                 address: Vertex::Source,
                 len: 99999,
-                targets: in_edges.iter().map(|(_s,t)| *t).collect(),
+                sources: HashSet::<Vertex<N>>::new(),
+                targets: in_edges.iter().map(|(_,t)| *t).collect(),
                 indegree: 0,
             }
         );
 
-        // the nodes in VAG are sorted by the address
-        // self.nodes_mut().sort_by_key(|x| x.address());
-
         // the edges coming from the new vertex increases the indegrees of some of the already existing vertices
+        // MAYBE: this extra update is not needed
         self.update_in_degrees();
 
     }
@@ -616,45 +573,33 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
     // given the list of outgoing edges: merge their targets into one new vertex
     // note: used only in scc::to_acyclic_vag hence the indegree update is there
-    pub fn add_target_vertex(&mut self, out_edges: &[(Vertex<N>, Vertex<N>)]) {
-
-        // delete the original outgoing edges, which points to non-existing vertices
-        self.erase_edges(out_edges);
+    pub fn add_sink_vertex(&mut self, out_edges: &[(Vertex<N>, Vertex<N>)]) {
 
         // the targets of these edges then are merged into one vertex
-        // with given indegree and small length
-        self.add_block(
+        // with given indegree, hashset of sources and small length
+        self.add_block_without_update(
             NoInstrBasicBlock {
                 // the reason why we masked N into Vertrex<N> is to have the Vertex::{Source, Sink} fields
                 address: Vertex::Sink,
                 len: 0,
+                sources: out_edges.iter().map(|(s,_)| *s).collect(),
                 targets: HashSet::<Vertex<N>>::new(),
-                // at the moment no incoming edges declared
-                indegree: 0,
-                //out_edges.len(),
+                indegree: out_edges.len(),
             }
         );
 
-        // the new outgoing edges will have this new vertex as target
-        let mut new_outgoing: Vec<(Vertex<N>,Vertex<N>)> = Vec::new();
-        for (source, _target) in out_edges {
-            new_outgoing.push( (*source, Vertex::Sink) );
+        // the old targets must be changed to be the new sink vertex
+        for (source, target) in out_edges {
+            let mut node = self.node_at_target_mut(*source);
+            node.erase_target(*target);
+            node.add_target(Vertex::Sink);
         }
 
-        // add these newly generated edges
-        // note: add_edges() updates the indegree of this new vertex: 0x1
-        self.add_edges(&new_outgoing);
-
-        // the nodes in VAG are sorted by the address
-        // self.nodes_mut().sort_by_key(|x| x.address());        
-
+        
     }
-
-
 
     // gets a VAG and returns the "optimal" order of its vertices
     // the final order won't contain Vertex::{Source, Sink}, hence we can unwrap the nodeids
-    // TODO !!!
     pub fn weighted_order(&self) -> Vec<N> {
         
         // TODO: is_cyclic_directed is recursive - maybe use topsort, but that seems redundant
@@ -667,9 +612,6 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                 .iter()
                 .map(|x| x.id().unwrap())
                 .collect()
-            // let topsort: Vec<N> = sort.iter().map(|x| x.id().unwrap()).collect();
-            // topsort
-
         } else {
             // collapse the strongly connected components into single vertices
             let condensed = self.condense();
@@ -681,12 +623,15 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             // Kahn's algorithm for the strongly connected components
             let components: Vec<Component<N>> = Component::from_vag(self);
 
-            // TODO: use HashMap where key: the id of the component(?) and value is the vector of nodes
-            let mut ordered_components: Vec<Vec<Vertex<N>>> = Vec::new();
+            // the order inside the components collected in a HashMap - key: id, value: ordered vector
+            let mut ordered_components: HashMap<Vertex<N>, Vec<Vertex<N>>> = HashMap::new();
+            // let mut ordered_components: Vec<Vec<Vertex<N>>> = Vec::new();
 
             for comp in components {
                 // if the component is trivial (i.e. single vertex) -> do nothing
                 if !comp.trivial() {
+                    // MAYBE: this is very expensive in runtime -> modify the component struct ?
+                    let comp_address: Vertex<N> = *comp.nodes().iter().min().unwrap();
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
 
@@ -694,12 +639,10 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&comp_vag);
                     let mut ord_comp: Vec<Vertex<N>> = kahngraph.kahn_algorithm();
 
-                    // delete the auxiliary nodes from the order
-                    // in theory, they must be the first (0x0) and the last (0x1) in the order
-                    // NOT CORRECT !!
+                    // delete the auxiliary nodes (Vertex::Source and Vertex::Sink) from the order
                     ord_comp.retain(|&x| x != Vertex::Source && x != Vertex::Sink);
 
-                    ordered_components.push(ord_comp);
+                    ordered_components.insert(comp_address, ord_comp);
                 }
             }
 
@@ -707,20 +650,13 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             // note: the Vertex enum wrap is not needed anymore 
             let mut topsort: Vec<N> = Vec::new();
 
-            // TODO: use somehow the component's ids
             while let Some(id) = topsort_condensed.pop() {
-                match ordered_components
-                        .iter()
-                        .position(|x| x.contains(&id)) {
-                    Some(pos) => {
-                        let mut component = ordered_components.remove(pos);
-                        while let Some(node) = component.pop() {
-                            topsort.push(node.id().unwrap());
-                        }
+                if let Some(mut component) = ordered_components.remove(&id){
+                    while let Some(node) = component.pop(){
+                        topsort.push(node.id().unwrap());
                     }
-                    None => {
-                        topsort.push(id.id().unwrap());
-                    }
+                } else {
+                    topsort.push(id.id().unwrap());
                 }
             }
 
@@ -737,6 +673,26 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         dot2::render(self, output)
     }
     */
+
+
+    // erase the given edge from the VAG
+    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
+    //       in add_sink_vertex() method, hence no indegree modification is necessary
+    // note: the above remark is not true - e.g. see to_acyclic_vag() method; however the indegrees are updated there
+    fn erase_edge(&mut self, edge: (Vertex<N>, Vertex<N>)) {
+        self.node_at_target_mut(edge.0).erase_target(edge.1);
+    }
+
+    // erase the given edges to the VAG
+    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
+    //       in add_sink_vertex() method, hence no indegree modification is necessary
+    // note: used only when phantom target is added to the graph hence the indegree update is there
+    pub fn erase_edges(&mut self, edges: &[(Vertex<N>, Vertex<N>)])  {
+        // TODO: optimalize !!
+        for &edge in edges {
+            self.erase_edge(edge);
+        }
+    }
 
 
 
@@ -780,15 +736,6 @@ impl<'a, N: VAGNodeId> petgraph::visit::IntoNeighbors for &'a VirtualAddressGrap
             .targets()
             .iter()
             .copied()
-
-        /*
-        let pos = 
-            self
-                .nodes()
-                .binary_search_by(|block| block.address().cmp(&a))
-                .unwrap();
-        self.nodes()[pos].targets().iter().copied()
-        */
 
     }
 }
@@ -839,7 +786,7 @@ impl<N: VAGNodeId> petgraph::visit::Visitable for VirtualAddressGraph<N> {
     }
 }
 
-use either::*;
+
 
 impl<'a, N: VAGNodeId> petgraph::visit::IntoNeighborsDirected for &'a VirtualAddressGraph<N> {
     type NeighborsDirected = impl Iterator<Item = Self::NodeId> + 'a;
@@ -847,24 +794,12 @@ impl<'a, N: VAGNodeId> petgraph::visit::IntoNeighborsDirected for &'a VirtualAdd
     fn neighbors_directed(self, n: Self::NodeId, d: petgraph::Direction) -> Self::NeighborsDirected {
         match d {
             petgraph::Direction::Outgoing => {
-                Left(
-                self
-                    .node_at_target(n)
-                    .targets()
-                    .iter()
-                    .copied()
-                )
+                // outgoing nieghbours = targets
+                self.node_at_target(n).targets().iter().copied()
             }
             petgraph::Direction::Incoming => {
-                Right(
-                self
-                    .nodes()
-                    .iter()
-                    .filter(move |(_, block)| block.targets().contains(&n))
-                    .map(|(&x,_)| x)
-                )
-            
-                
+                // incoming neighbours = sources
+                self.node_at_target(n).sources().iter().copied()
             }
         }
     }
@@ -924,7 +859,6 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
             .iter()
             .map(|(&x,_)| x)
             .collect()
-        // iter().map(|n| n.address()).collect()
     }
 
     // all edges of the graph
@@ -933,6 +867,17 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
     where [(N,N)]: ToOwned,
     {
 
+        self
+            .nodes()
+            .iter()
+            .flat_map(|(address,block)| 
+                block.targets().iter().map(|target| (*address, *target))
+            )
+            .into_iter()
+            .collect()
+    
+
+        /*
         let mut edges: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
         for (source, node) in self.nodes() {
@@ -943,6 +888,8 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
         }
 
         edges.into_iter().collect()
+
+        */
     }
 
     // source node for the given edge
@@ -974,6 +921,9 @@ impl<N: VAGNodeId> NodeWeight for &VirtualAddressGraph<N> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
+
+
+// TBC !! - how to do this ??
 
 #[derive(Serialize, Deserialize)]
 pub struct UnwrappedBasicBlock<N: VAGNodeId> {

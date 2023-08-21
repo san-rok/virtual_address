@@ -54,7 +54,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
     }
 
     // returns the collection of nodes in the strongly connnected component
-    fn nodes(&self) -> &HashSet<Vertex<N>> {
+    pub fn nodes(&self) -> &HashSet<Vertex<N>> {
         &self.component
     }
 
