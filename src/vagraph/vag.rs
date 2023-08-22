@@ -646,7 +646,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                 // if the component is trivial (i.e. single vertex) -> do nothing
                 if !comp.trivial() {
                     // MAYBE: this is very expensive in runtime -> modify the component struct ?
-                    let comp_address: Vertex<N> = *comp.nodes().iter().min().unwrap();
+                    // let comp_address: Vertex<N> = *comp.nodes().iter().min().unwrap();
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
 
@@ -657,7 +657,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     // delete the auxiliary nodes (Vertex::Source and Vertex::Sink) from the order
                     ord_comp.retain(|&x| x != Vertex::Source && x != Vertex::Sink);
 
-                    ordered_components.insert(comp_address, ord_comp);
+                    ordered_components.insert(comp.compid(), ord_comp);
                 }
             }
 

@@ -58,7 +58,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
     }
 
     // the identifier of the component = smallest nodeid inside
-    fn compid(&self) -> Vertex<N> {
+    pub fn compid(&self) -> Vertex<N> {
         self.compid
     }
 
