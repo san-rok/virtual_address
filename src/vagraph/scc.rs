@@ -14,6 +14,8 @@ pub struct Component<'a, N: VAGNodeId> {
     graph: &'a VirtualAddressGraph<N>,
     // the strongly connected component
     component: HashSet<Vertex<N>>,
+    // identifier of the component: smallest nodeid
+    compid: Vertex<N>,
 }
 
 impl<'a, N: VAGNodeId> Component<'a, N> {
@@ -40,6 +42,8 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
                 Self { 
                     graph: vag,
                     component: strongly,
+                    // the id of a component is the minimal nodeid inside
+                    compid: *comp.iter().min().unwrap(),
                 }
             )
         }
@@ -51,6 +55,11 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
     // returns a reference to the original graph
     fn whole(&self) -> &VirtualAddressGraph<N> {
         self.graph
+    }
+
+    // the identifier of the component = smallest nodeid inside
+    fn compid(&self) -> Vertex<N> {
+        self.compid
     }
 
     // returns the collection of nodes in the strongly connnected component
@@ -78,10 +87,8 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
             .targets()
     }
 
-    // TBC!!
 
     // a collection of incoming edges
-    // TODO: HashSet or Vector ??
     fn incoming_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
 
         let mut incoming: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
@@ -94,28 +101,11 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
             }
         }
 
-        /*
-        for node in self.nodes() {
-
-            for (source, block) in self.whole().nodes() {
-                for target in block.targets() {
-                    if target == node && !self.contains(*source) {
-                        incoming.push((*source, *node))
-                    }
-                }
-            }
-        }
-        */
-
-        // sorted by source and then target
-        // TODO: is it really needed?
-        // incoming.sort_by_key(|item| (item.0, item.0) );
         incoming
 
     }
 
     // a collection of outgoing edges
-    // TODO: HashSet or Vector ??
     fn outgoing_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
 
         let mut outgoing: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
@@ -128,10 +118,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
             }
         }
 
-        // sorted by source and then target
-        // outgoing.sort_by_key(|item| (item.0, item.0) );
         outgoing
-
     }
 
     // from a Component it generates a VirtualAddressGraph, where
@@ -140,7 +127,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
     // MAYBE: create an enum that sets if acyclic or not
     pub fn to_acyclic_vag(&self) -> VirtualAddressGraph<N> {
 
-        let address = self.nodes().iter().min().unwrap();
+        // let address = self.nodes().iter().min().unwrap();
 
         let mut nodes: HashMap<Vertex<N>, NoInstrBasicBlock<N>> = HashMap::new();
         for node in self.nodes() {
@@ -152,21 +139,27 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
             );
         }
 
-        let mut vag: VirtualAddressGraph<N> = VirtualAddressGraph::new(*address, nodes);
+        let mut vag: VirtualAddressGraph<N> = VirtualAddressGraph::new(self.compid(), nodes);
         
+        // all the incoming edges of the component
         let ins: Vec<(Vertex<N>, Vertex<N>)> = self.incoming_edges();
+        // all the outgoing edges of the component
         let outs: Vec<(Vertex<N>, Vertex<N>)> = self.outgoing_edges();
 
+        // merge the incoming edges' start nodes into one source node
+        // note: no extra update/modification is needed
         vag.add_source_vertex(&ins);
-        vag.add_target_vertex(&outs);
+        // merge the outgoing edges' target nodes into one sink node
+        // note: no extra update/modification is needed
+        vag.add_sink_vertex(&outs);
 
+        // a vector of backtracking edges in the strongly connected component
         let backs = vag.backedges();
 
-        // this edge erasing won't modify the indegrees -> it is a must to do that in the next line
+        // to break directed cycles we need to throw all of them away
+        // note:    the erase_edge() method also modifies the indegree of the target node
+        //          hence no extra update/modification is needed
         vag.erase_edges(&backs);
-
-        // TODO: update the indegrees at the place of modification!!
-        vag.update_in_degrees();
 
         vag
 
