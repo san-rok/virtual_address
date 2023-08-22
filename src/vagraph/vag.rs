@@ -142,6 +142,16 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.sources.extend(sources);
     }
 
+    // deletes the given source from the sources hashset if it's there (which will hold all the time)
+    // note: this also results in an indegree modification
+    fn erase_source(&mut self, source: Vertex<N>) {
+        if self.sources.remove(&source) {
+            // if the given vertex is there -> decrease the indegree too!!
+            self.decrease_indegree();
+        }
+
+    }
+
     // extends the vector of targets by the given address
     // note: we can not modify here the target's indegree !!!
     fn add_target(&mut self, target: Vertex<N>) {
@@ -170,6 +180,11 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.set_indegree(self.indegree + 1);
     }
 
+    // decrease the indegree of the block by 1
+    // note: extra check wil be needed - this can not go below zero
+    fn decrease_indegree(&mut self) {
+        self.set_indegree(self.indegree - 1);
+    }
 
 }
 
@@ -566,7 +581,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         // the edges coming from the new vertex increases the indegrees of some of the already existing vertices
         // MAYBE: this extra update is not needed
-        self.update_in_degrees();
+        // self.update_in_degrees();
 
     }
 
@@ -675,20 +690,18 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     */
 
 
-    // erase the given edge from the VAG
-    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
-    //       in add_sink_vertex() method, hence no indegree modification is necessary
-    // note: the above remark is not true - e.g. see to_acyclic_vag() method; however the indegrees are updated there
+    // erase the given edge from the VAG, which MUST BE in the edge set of the graph
+    // note: this also modifies the .sources and the .indegree fields of the target node
     fn erase_edge(&mut self, edge: (Vertex<N>, Vertex<N>)) {
         self.node_at_target_mut(edge.0).erase_target(edge.1);
+        self.node_at_target_mut(edge.1).erase_source(edge.0);    
     }
 
     // erase the given edges to the VAG
-    // note: we only erase such edges that points to a non-existing targets (outgoing from a subgraph)
-    //       in add_sink_vertex() method, hence no indegree modification is necessary
-    // note: used only when phantom target is added to the graph hence the indegree update is there
+    // note:    we only use this method when we erase the backtracking edges in the Component struct's
+    //          to_acyclic_vag() method - since erase_edge() modifies data for both endpoints of the given 
+    //          edge, hence no extra modificítion is needed when used
     pub fn erase_edges(&mut self, edges: &[(Vertex<N>, Vertex<N>)])  {
-        // TODO: optimalize !!
         for &edge in edges {
             self.erase_edge(edge);
         }
@@ -943,7 +956,8 @@ impl<N: VAGNodeId> UnwrappedBasicBlock<N> {
 
         NoInstrBasicBlock{ 
             address: Vertex::Id(self.address), 
-            len: self.len, 
+            len: self.len,
+            sources: HashSet::<Vertex<N>>::new(), 
             targets: self.targets.iter().map(|&x| Vertex::Id(x)).collect(), 
             indegree: self.indegree, 
         }
