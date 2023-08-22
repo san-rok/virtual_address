@@ -137,7 +137,7 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         &self.sources
     }
 
-    fn set_sources(&mut self, sources: HashSet<Vertex<N>>) {
+    fn set_sources(&mut self, sources: &HashSet<Vertex<N>>) {
         // takes the union of self.sources and sources
         self.sources.extend(sources);
     }
@@ -175,10 +175,12 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.indegree = indegree;
     }
 
+    /*
     // increase the indegree of the block by 1
     fn increase_indegree(&mut self) {
         self.set_indegree(self.indegree + 1);
     }
+    */
 
     // decrease the indegree of the block by 1
     // note: extra check wil be needed - this can not go below zero
@@ -273,7 +275,7 @@ impl VirtualAddressGraph<u64> {
         };
 
         // TODO: merge this two iterations - more effective algoithm!!
-        vag.update_in_degrees();
+        vag.update_sources_and_indegrees();
 
         vag
     }
@@ -322,7 +324,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         let sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = self.sources();
 
         for (id, node) in self.nodes_mut() {
-            node.set_sources( *sources.get(id).unwrap() );
+            node.set_sources( sources.get(id).unwrap() );
         }
     }
 
@@ -367,7 +369,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         let sources: BTreeMap<Vertex<N>, HashSet<Vertex<N>>> = self.sources();
 
         for (id, node) in self.nodes_mut() {
-            node.set_sources( *sources.get(id).unwrap() );
+            node.set_sources( sources.get(id).unwrap() );
             node.set_indegree( node.sources().len() );
         }
 
@@ -605,7 +607,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         // the old targets must be changed to be the new sink vertex
         for (source, target) in out_edges {
-            let mut node = self.node_at_target_mut(*source);
+            let node = self.node_at_target_mut(*source);
             node.erase_target(*target);
             node.add_target(Vertex::Sink);
         }
@@ -886,7 +888,6 @@ impl<'a, N: VAGNodeId> dot2::GraphWalk<'a> for VirtualAddressGraph<N> {
             .flat_map(|(address,block)| 
                 block.targets().iter().map(|target| (*address, *target))
             )
-            .into_iter()
             .collect()
     
 

@@ -24,6 +24,7 @@ impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N> {
     }
     */
 
+    // the referenced block
     fn block(&self) -> &'a NoInstrBasicBlock<N> {
         self.block
     }
@@ -40,18 +41,23 @@ impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N> {
     }
     */
 
+    // the indegree of the referenced block
     fn indegree(&self) -> usize {
         self.block.indegree()
     }
 
+    // the number of already deleted (incoming) edges
     fn deleted(&self) -> usize {
         self.deleted
     }
 
+    // setter method for the number of deleted (incoming) edges
+    // note: it is not necessary, we only use it after Kahn's algorithm to reset the KahnGraph instance
     fn set_deleted(&mut self, deleted: usize) {
         self.deleted = deleted;
     }
 
+    // adds one to the number of deleted edges
     fn recude_by_one(&mut self) {
         self.deleted += 1;
     }
@@ -79,8 +85,6 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
                 }
             );
         }
-
-        // nodes.sort_by_key(|x| x.address());
 
         KahnGraph { 
             address: vag.address(), 

@@ -38,7 +38,8 @@ pub fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
                 // NOT CORRECT YET! what about the length - this is just a vertex weight
                 g.weight(block), 
                 // g.neighbors(block).map(|x| Vertex::Id(x)).collect(),
-                g.neighbors(block).map(Vertex::Id).collect(),
+                g.neighbors_directed(block, petgraph::Direction::Incoming).map(Vertex::Id).collect(),
+                g.neighbors_directed(block, petgraph::Direction::Outgoing).map(Vertex::Id).collect(),
                 g.neighbors_directed(block, petgraph::Direction::Incoming).count(),
             )
         );
