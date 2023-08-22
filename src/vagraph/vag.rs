@@ -370,7 +370,8 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         for (id, node) in self.nodes_mut() {
             node.set_sources( sources.get(id).unwrap() );
-            node.set_indegree( node.sources().len() );
+            node.set_indegree( sources.get(id).unwrap().len());
+            // node.set_indegree( node.sources().len() );
         }
 
     }
@@ -581,6 +582,8 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             }
         );
 
+        // self.update_sources_and_indegrees();
+
         // the edges coming from the new vertex increases the indegrees of some of the already existing vertices
         // MAYBE: this extra update is not needed
         // self.update_in_degrees();
@@ -607,11 +610,21 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         // the old targets must be changed to be the new sink vertex
         for (source, target) in out_edges {
+            // self.node_at_target_mut(*source).erase_target(*target);
+            // self.node_at_target_mut(*source).add_target(Vertex::Sink);
+            
+            // TEST
             let node = self.node_at_target_mut(*source);
+            println!("targets of the node: {:x} prior the change: {:x?}", node.address(), node.targets());
             node.erase_target(*target);
+            println!("targets of the node: {:x} after the delete: {:x?}", node.address(), node.targets());
             node.add_target(Vertex::Sink);
+            println!("targets of the node: {:x} after the insert: {:x?}", node.address(), node.targets());
+            
         }
 
+        // TBC !!
+        // self.update_sources_and_indegrees();
         
     }
 
@@ -652,6 +665,9 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
 
+                    // TEST 
+                    // println!("sources of the sink: {:x?}", comp_vag.node_at_target(Vertex::Sink).sources());
+
                     // Kahn's algorithm for the given component
                     let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&comp_vag);
                     let mut ord_comp: Vec<Vertex<N>> = kahngraph.kahn_algorithm();
@@ -685,11 +701,9 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     }
 
     // from graph to .dot
-    /*
-    fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
+    pub fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
-    */
 
 
     // erase the given edge from the VAG, which MUST BE in the edge set of the graph
@@ -991,10 +1005,15 @@ impl<N: VAGNodeId> UnwrappedVAGraph<N> {
         }
 
 
-        VirtualAddressGraph { 
+        let mut vag = VirtualAddressGraph { 
             address: Vertex::Id(self.address), 
             nodes: wrappednodes,
-        }
+        };
+
+        vag.update_sources_and_indegrees();
+        // vag.update_in_degrees();
+
+        vag
 
     }
 

@@ -8,6 +8,7 @@ use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
 use std::default::Default;
 use std::collections::HashMap;
+use std::cmp::*;
 
 use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoNeighborsDirected, GraphBase};
 
@@ -72,7 +73,7 @@ pub fn bbsort<G>(g: G) -> Vec<G::NodeId>
 
 
 // cost of given order 
-pub fn cost<G>(g: G, order: &[G::NodeId]) -> usize
+pub fn cost<G>(g: G, order: &[G::NodeId]) -> (usize, bool)
     where
         G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + 
         NodeWeight<Node = G::NodeId>,
@@ -91,9 +92,17 @@ pub fn cost<G>(g: G, order: &[G::NodeId]) -> usize
     println!("starting block's address: {:x}", vag.address().id().unwrap());
 
     // TODO: legit error handling
-    if initial_order.len() != order.len() {
-        println!("some blocks are missing!")
+    match initial_order.len().cmp(&order.len()) {
+        Ordering::Less => { panic!("there were less nodes originally") }
+        Ordering::Greater => { panic!("some nodes are missing from the order")}
+        Ordering::Equal => (),
     }
+
+    /*
+    if initial_order.len() < order.len() {
+        panic!("some blocks are missing!")
+    }
+    */
 
     for i in 0..initial_order.len() {
         println!("{:x}, {:x}", initial_order[i], order[i]);
@@ -107,6 +116,6 @@ pub fn cost<G>(g: G, order: &[G::NodeId]) -> usize
     println!("cost of original order: {}", original_cost);
     println!("cost of topological sort: {} \n", sorted_cost);
 
-    sorted_cost
+    (sorted_cost, original_cost >= sorted_cost)
 }
 

@@ -153,6 +153,11 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
         // note: no extra update/modification is needed
         vag.add_sink_vertex(&outs);
 
+        // TEST
+        println!("the incoming edges: {:x?}", ins);
+        println!("the outgoing edges: {:x?}", outs);
+        println!("sources of the sink vertex: {:x?}", vag.node_at_target(Vertex::Sink).sources());
+
         // a vector of backtracking edges in the strongly connected component
         let backs = vag.backedges();
 
