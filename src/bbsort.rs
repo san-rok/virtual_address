@@ -28,6 +28,11 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
         return Err(SortError::EmptyGraph);
     }
 
+    // if the given entry address is not a node of the graph, then return error
+    if g.node_identifiers().find(|&x| x == entry).is_none() {
+        return Err(SortError::InvalidInitialAddress);
+    }
+
     // the initial address of the given graph is the one with the smallest id
     // IS THIS CORRECT AT ALL?
     // let address = g.node_identifiers().min().ok_or(SortError::MissingInitialAddress).unwrap();
@@ -206,12 +211,109 @@ mod test {
         assert_eq!(to_vag(&vag, address).is_err_and(|x| x ==  SortError::NotStronglyConnectedGraph), true);  
 
     }
+
+
+    #[test]
+    fn invalid_entry_address() {
+        let address: Vertex<u64> = Vertex::Id(0x3);
+        let mut nodes: HashMap<Vertex<u64>, NoInstrBasicBlock<u64>> = HashMap::new();
+
+        nodes.insert(
+            Vertex::Id(0x0),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x0),
+                1,
+                std::collections::HashSet::<Vertex<u64>>::new(),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x1), Vertex::Id(0x2)]),
+                0
+            )
+        );
+
+        nodes.insert(
+            Vertex::Id(0x1),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x1),
+                10,
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x1)]),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x2)]),
+                1
+            )
+        );
+
+        nodes.insert(
+            Vertex::Id(0x2),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x2),
+                5,
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x0), Vertex::Id(0x1)]),
+                std::collections::HashSet::<Vertex<u64>>::new(),
+                2
+            )
+        );
+
+        let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::new(
+            address,
+            nodes
+        );
+
+        assert_eq!(to_vag(&vag, address).is_err_and(|x| x ==  SortError::InvalidInitialAddress), true);
+
+    }
+
+
+    #[test]
+    fn filtered_targets() {
+
+        let address: Vertex<u64> = Vertex::Id(0x0);
+        let mut nodes: HashMap<Vertex<u64>, NoInstrBasicBlock<u64>> = HashMap::new();
+
+        nodes.insert(
+            Vertex::Id(0x0),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x0),
+                1,
+                std::collections::HashSet::<Vertex<u64>>::new(),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x1)]),
+                0
+            )
+        );
+
+        nodes.insert(
+            Vertex::Id(0x1),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x1),
+                10,
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x0)]),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x2)]),
+                0
+            )
+        );
+
+        let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::new(
+            address,
+            nodes
+        );
+
+        let out_vag = to_vag(&vag, address).unwrap();
+
+        // TBC !!
+        // it is probable that dfs won't work :(
+
+        assert_eq!(vag.nodes().len(), out_vag.nodes().len());
+
+        // println!("{:#x?}", out_vag);
+
+        // assert_eq!(to_vag(&vag, address).is_err_and(|x| x ==  SortError::NotStronglyConnectedGraph), true);  
+
+    }
+
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SortError {
     EmptyGraph,
     NotStronglyConnectedGraph,
+    InvalidInitialAddress,
     MissingInitialAddress,
 }
 
