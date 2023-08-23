@@ -94,15 +94,9 @@ pub fn cost<G>(g: G, order: &[G::NodeId]) -> (usize, bool)
     // TODO: legit error handling
     match initial_order.len().cmp(&order.len()) {
         Ordering::Less => { panic!("there were less nodes originally") }
-        Ordering::Greater => { panic!("some nodes are missing from the order")}
+        Ordering::Greater => { panic!("some nodes are missing from the order") }
         Ordering::Equal => (),
     }
-
-    /*
-    if initial_order.len() < order.len() {
-        panic!("some blocks are missing!")
-    }
-    */
 
     for i in 0..initial_order.len() {
         println!("{:x}, {:x}", initial_order[i], order[i]);

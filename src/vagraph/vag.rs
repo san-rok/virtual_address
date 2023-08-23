@@ -149,8 +149,15 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
             // if the given vertex is there -> decrease the indegree too!!
             self.decrease_indegree();
         }
-
     }
+
+    /*
+    // deletes the given source from the sources hashset if it's there
+    // BUT it does not change the indegree!!
+    fn erase_source_but_keep_indegree(&mut self, source: Vertex<N>) {
+        self.sources.remove(&source);
+    }
+    */
 
     // extends the vector of targets by the given address
     // note: we can not modify here the target's indegree !!!
@@ -175,12 +182,10 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         self.indegree = indegree;
     }
 
-    /*
     // increase the indegree of the block by 1
     fn increase_indegree(&mut self) {
         self.set_indegree(self.indegree + 1);
     }
-    */
 
     // decrease the indegree of the block by 1
     // note: extra check wil be needed - this can not go below zero
@@ -582,11 +587,22 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
             }
         );
 
-        // self.update_sources_and_indegrees();
+        // TODO: do it in a more clever way !!
+        // the original source vertices may not be in the new graph
+        for (source, target) in in_edges {
+            let node = self.node_at_target_mut(*target);
+            // delete the outsider source node's id
+            node.sources.remove(&source);
+            // decrease the indegree of the given node (in the component)
+            node.decrease_indegree();
+            // insert the new Source vertex - if it's not in yet, then add +1 to the indegree
+            if node.sources.insert(Vertex::Source) {
+                node.increase_indegree();
+            }
+        }
 
-        // the edges coming from the new vertex increases the indegrees of some of the already existing vertices
-        // MAYBE: this extra update is not needed
-        // self.update_in_degrees();
+        // note: we modify the graph only locally, hence no global update is needed
+        // self.update_sources_and_indegrees();
 
     }
 
@@ -610,20 +626,12 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
         // the old targets must be changed to be the new sink vertex
         for (source, target) in out_edges {
-            // self.node_at_target_mut(*source).erase_target(*target);
-            // self.node_at_target_mut(*source).add_target(Vertex::Sink);
-            
-            // TEST
             let node = self.node_at_target_mut(*source);
-            println!("targets of the node: {:x} prior the change: {:x?}", node.address(), node.targets());
             node.erase_target(*target);
-            println!("targets of the node: {:x} after the delete: {:x?}", node.address(), node.targets());
-            node.add_target(Vertex::Sink);
-            println!("targets of the node: {:x} after the insert: {:x?}", node.address(), node.targets());
-            
+            node.add_target(Vertex::Sink);            
         }
 
-        // TBC !!
+        // note: we modify the graph only locally, hence no global update is needed
         // self.update_sources_and_indegrees();
         
     }
@@ -664,9 +672,6 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                     // let comp_address: Vertex<N> = *comp.nodes().iter().min().unwrap();
                     // break the cycles and add auxiliary source and target nodes
                     let comp_vag = comp.to_acyclic_vag();
-
-                    // TEST 
-                    // println!("sources of the sink: {:x?}", comp_vag.node_at_target(Vertex::Sink).sources());
 
                     // Kahn's algorithm for the given component
                     let mut kahngraph: KahnGraph<N> = KahnGraph::from_vag(&comp_vag);

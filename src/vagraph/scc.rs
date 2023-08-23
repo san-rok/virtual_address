@@ -148,18 +148,22 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
         // merge the incoming edges' start nodes into one source node
         // note: no extra update/modification is needed
-        vag.add_source_vertex(&ins);
+        // note: when there are no incoming edges -> no extra source node is needed
+        if !ins.is_empty() {
+            vag.add_source_vertex(&ins);
+        }
         // merge the outgoing edges' target nodes into one sink node
         // note: no extra update/modification is needed
-        vag.add_sink_vertex(&outs);
-
-        // TEST
-        println!("the incoming edges: {:x?}", ins);
-        println!("the outgoing edges: {:x?}", outs);
-        println!("sources of the sink vertex: {:x?}", vag.node_at_target(Vertex::Sink).sources());
+        // note: when there are no outgoind edges -> no extra sink node is needed
+        if !outs.is_empty() {
+            vag.add_sink_vertex(&outs);
+        }
 
         // a vector of backtracking edges in the strongly connected component
         let backs = vag.backedges();
+
+        // TEST
+        println!("the backtracking edges: {:x?}", backs);
 
         // to break directed cycles we need to throw all of them away
         // note:    the erase_edge() method also modifies the indegree of the target node
