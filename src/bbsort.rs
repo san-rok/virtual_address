@@ -15,10 +15,7 @@ use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoNei
 
 use kendalls::tau_b;
 
-pub trait NodeWeight {
-    type Node; 
-    fn weight(&self, node: Self::Node) -> usize;
-}
+
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
@@ -36,9 +33,7 @@ pub fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
             Vertex::Id(block),
             NoInstrBasicBlock::<G::NodeId>::new(
                 Vertex::Id(block), 
-                // NOT CORRECT YET! what about the length - this is just a vertex weight
                 g.weight(block), 
-                // g.neighbors(block).map(|x| Vertex::Id(x)).collect(),
                 g.neighbors_directed(block, petgraph::Direction::Incoming).map(Vertex::Id).collect(),
                 g.neighbors_directed(block, petgraph::Direction::Outgoing).map(Vertex::Id).collect(),
                 g.neighbors_directed(block, petgraph::Direction::Incoming).count(),
@@ -46,10 +41,7 @@ pub fn to_vag<G>(g: G) -> VirtualAddressGraph<G::NodeId>
         );
     }
 
-    // nodes.sort_by_key(|node| node.address());
-
     let vag: VirtualAddressGraph<G::NodeId> = VirtualAddressGraph::new(
-        // *nodes.iter().map(|(x,_)| x).min().unwrap(),
         *nodes.keys().min().unwrap(),
         nodes,
     );
@@ -113,3 +105,28 @@ pub fn cost<G>(g: G, order: &[G::NodeId]) -> (usize, bool)
     (sorted_cost, original_cost >= sorted_cost)
 }
 
+
+
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn empty_graph() {
+
+    }
+}
+
+
+
+// TODO:
+//      * empty graph -> Err
+//      * not connected graph -> Err
+//      * some small graphs where the order can be check by hands -> is the same result, no panic
+//      * no initial address -> Err (?)
+//      * the target of an edge is not in the graph -> ??
+
+
+// 

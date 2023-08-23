@@ -2,7 +2,8 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, HashSet, HashMap};
 
-use crate::{cfg::*, NodeWeight};
+// use crate::bbsort::NodeWeight;
+use crate::cfg::*;
 use crate::vagraph::kahn::*;
 use crate::vagraph::scc::*;
 
@@ -18,6 +19,11 @@ use serde::{Serialize, Deserialize};
 use petgraph::algo::{is_cyclic_directed, tarjan_scc};
 use petgraph::visit::*;
 
+
+pub trait NodeWeight {
+    type Node; 
+    fn weight(&self, node: Self::Node) -> usize;
+}
 
 
 pub trait VAGNodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex {}
