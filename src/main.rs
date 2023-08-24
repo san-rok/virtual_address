@@ -50,19 +50,19 @@ fn main() {
     let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
 
     
-    let vag = vags.iter().find(|x| x.address().id().unwrap() == 0x184502670).unwrap();
+    // let vag = vags.iter().find(|x| x.address().id().unwrap() == 0x184502670).unwrap();
     // let topsort = bbsort(vag);
     // cost(vag, &topsort);
 
-    let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
-    vag.render_to(&mut file).unwrap();
+    // let mut file = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
+    // vag.render_to(&mut file).unwrap();
     // dot -Tsvg test.dot > test.svg
 
     let mut count_better: usize = 0;
-    let mut count_connected: usize = 0;
+    // let mut count_connected: usize = 0;
 
     for vag in vags {
-        println!("start address of the graph: {:x}", vag.address().id().unwrap());
+        // println!("start address of the graph: {:x}", vag.address().id().unwrap());
 
         /*
         match bbsort(&vag) {
@@ -76,7 +76,7 @@ fn main() {
 
         
         if let Ok(topsort) = bbsort(&vag, vag.address()) {
-            count_connected += 1;
+            // count_connected += 1;
             if cost(&vag, vag.address(), &topsort).1 { count_better += 1; } 
         }
         
@@ -85,7 +85,7 @@ fn main() {
         // if cost(&vag, &topsort).1 { counter += 1; }
     }
 
-    println!("connected cfgs: {}", count_connected);
+    // println!("connected cfgs: {}", count_connected);
     println!("better results: {}", count_better);
 
 

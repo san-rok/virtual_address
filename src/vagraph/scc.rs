@@ -162,9 +162,6 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
         // a vector of backtracking edges in the strongly connected component
         let backs = vag.backedges();
 
-        // TEST
-        println!("the backtracking edges: {:x?}", backs);
-
         // to break directed cycles we need to throw all of them away
         // note:    the erase_edge() method also modifies the indegree of the target node
         //          hence no extra update/modification is needed
