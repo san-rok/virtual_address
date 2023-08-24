@@ -42,7 +42,7 @@ fn main() {
     println!("{:x?}", topsort);
 
     let topsort: Vec<u64> = topsort.iter().map(|&x| x.id().unwrap()).collect();
-    println!("cost of order: {}", vag.cost_of_order(topsort));
+    println!("cost of order: {}", vag.cost_of_order(&topsort));
     
     // test dags 
     let file = std::fs::File::open("cfg.yaml").unwrap();
@@ -76,8 +76,9 @@ fn main() {
 
         
         if let Ok(topsort) = bbsort(&vag, vag.address()) {
-            // count_connected += 1;
-            if cost(&vag, vag.address(), &topsort).1 { count_better += 1; } 
+            let cfg_order = cfg_cost(&vag, vag.address(), &topsort).unwrap();
+            println!("{}", cfg_order);
+            if cfg_order.is_better() {count_better += 1;} 
         }
         
 

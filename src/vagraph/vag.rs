@@ -506,13 +506,13 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
 
     // this method is just an inspector -> no Vertex::{Source, Sink} will be presented
     // no need to wrap the nodes in the argument into Vertex enum
-    pub fn cost_of_order(&self, order: Vec<N>) -> usize {
+    pub fn cost_of_order(&self, order: &[N] /*Vec<N>*/) -> usize {
 
         // the list of nodes in the given order
         let mut ordered: Vec<&NoInstrBasicBlock<N>> = Vec::new();
         let mut cost: usize = 0;
 
-        for address in &order {
+        for address in order {
             ordered.push(self.node_at_target(Vertex::Id(*address)));
         }
 
