@@ -740,12 +740,14 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
     }
 
     // erase those edges that go out of the graph and hence not relevant for the ordering
-    // note: in such a case we print out the deleted edges' ids to let the user know
+    // and returns a hashset of those edges to print out the deleted edges' ids to let the user know
     // note:    in general we think adout VAGraph instances without such outgoing edges
     //          hence this method is only used when we generate a VAGraph from a given graph-like input
     //          (even if the presence of such edges does not matter for our algorithm - which can not see them at all)
-    pub fn erase_outgoing_edges(&mut self) {
+    pub fn erase_outgoing_edges(&mut self) -> HashSet<(N,N)> {
         let nodes: HashSet<Vertex<N>> = self.nodes().keys().copied().collect();
+
+        let mut outgoing_edges: HashSet<(N, N)> = HashSet::new();
 
 
         for (id, block) in self.nodes_mut() {
@@ -754,11 +756,15 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
                 .retain(|x|{
                     let is_valid_edge = nodes.contains(x);
                     if !is_valid_edge {
-                        println!("the edge: ({},{}) is leaving the graph, hence deleted", id.id().unwrap(), x.id().unwrap());
+                        outgoing_edges.insert( (id.id().unwrap(), x.id().unwrap()) );
+                        // println!("the edge: ({},{}) is leaving the graph, hence deleted", id.id().unwrap(), x.id().unwrap());
                     }   
                     is_valid_edge
                 });
         }
+
+        outgoing_edges
+
     }
 
     // running a DFS it checks whether if all the nodes are reachable from the entry or not in the VAGraph
