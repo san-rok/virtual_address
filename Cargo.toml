@@ -15,3 +15,4 @@ serde = { version = "1.0.179", features = ["derive"] }
 serde_yaml = "0.9.25"
 kendalls = "0.2.1"
 either = "1.9.0"
+log = "0.4.20"
