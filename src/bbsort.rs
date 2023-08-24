@@ -56,7 +56,11 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
     );
 
     // deleting the outging edges - whenever we found one: print out !
-    vag.erase_outgoing_edges();
+    let outgoing_edges = vag.erase_outgoing_edges();
+    println!("the following edges leave the graph, hence deleted:");
+    for (s,t) in outgoing_edges {
+        println!("{:x} --> {:x}", s, t);
+    }
 
     Ok(vag)
 
