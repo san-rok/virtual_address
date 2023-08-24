@@ -55,11 +55,10 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
         nodes,
     );
 
-    // deleting the outging edges - whenever we found one: print out !
     let outgoing_edges = vag.erase_outgoing_edges();
-    println!("the following edges leave the graph, hence deleted:");
+    log::debug!("the following edges leave the graph, hence deleted:");
     for (s,t) in outgoing_edges {
-        println!("{:x} --> {:x}", s, t);
+        log::debug!("{:x} --> {:x}", s, t);
     }
 
     Ok(vag)
@@ -80,9 +79,9 @@ pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError>
     // if there exists a node which we can not reach from entry -> error
     let unreachable = vag.unreachable_from_start();
     if !unreachable.is_empty() {
-        println!("from the start: {:x}, the following nodes are not reachable:", entry);
+        log::debug!("from the start: {:x}, the following nodes are not reachable:", entry);
         for id in unreachable {
-            println!("{:x}", id.id().unwrap());
+            log::debug!("{:x}", id.id().unwrap());
         }
         return Err(SortError::UnreachableNodes);
     }
@@ -92,7 +91,7 @@ pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError>
 
 }
 
-
+/*
 // cost of given order 
 pub fn cost<G>(g: G, entry: G::NodeId, order: &[G::NodeId]) -> (usize, bool)
     where
@@ -134,7 +133,86 @@ pub fn cost<G>(g: G, entry: G::NodeId, order: &[G::NodeId]) -> (usize, bool)
 
     (sorted_cost, original_cost >= sorted_cost)
 }
+*/
 
+
+pub fn cfg_cost<G> (g: G, entry: G::NodeId, order: &[G::NodeId]) -> Result<CfgOrder<G::NodeId>, CostError>
+    where
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
+            NodeWeight<Node = G::NodeId>,
+        <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+{
+    // TODO: what if the input is bad again ?
+    let vag: VirtualAddressGraph<G::NodeId> = to_vag(g, entry).unwrap();
+
+    // the original order of the nodes is the ascending order of the ids
+    let mut original_order: Vec<G::NodeId> = Vec::new();
+    for node in vag.nodes().keys() {
+        original_order.push(node.id().unwrap());
+    }
+    original_order.sort();
+
+    // if some nodes missing or there are too much -> return error
+    match original_order.len().cmp(&order.len()) {
+        Ordering::Less => Err(CostError::MoreNodesthanOriginal),
+        Ordering::Greater => Err(CostError::LessNodesThanOriginal),
+        Ordering::Equal => {
+            let kendall_tau = tau_b(&original_order, order).unwrap().0;
+            let original_cost: usize = vag.cost_of_order(&original_order);
+            let sorted_cost: usize = vag.cost_of_order(order);
+
+            Ok(
+                CfgOrder { 
+                    entry: entry, 
+                    order: order.to_vec(), 
+                    original_order: original_order, 
+                    cost: sorted_cost, 
+                    original_cost: original_cost, 
+                    kendall_tau: kendall_tau, 
+                }
+            )
+        }
+    }
+    
+
+}
+
+pub struct CfgOrder<N>
+    where N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+{
+    entry: N,
+    order: Vec<N>,
+    original_order: Vec<N>,
+    cost: usize,
+    original_cost: usize,
+    kendall_tau: f64,
+}
+
+impl<N> CfgOrder<N>
+    where N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+{
+    pub fn is_better(&self) -> bool {
+        self.cost <= self.original_cost
+    }
+}
+
+impl<N> Display for CfgOrder<N> 
+    where N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "starting block's address: {:x}", self.entry).ok();
+        writeln!(f, "original order, sorted order").ok();
+        for i in 0..self.original_order.len() {
+            writeln!(f, "{:x}, {:x}", self.original_order[i], self.order[i]).ok();
+        }
+        writeln!(f, "kendall tau: {:#?}", self.kendall_tau).ok();
+        writeln!(f, "cost of original order: {}", self.original_cost).ok();
+        writeln!(f, "cost of topological sort: {} \n", self.cost)
+    }
+}
+
+
+// TODO: implement display for CfgOrder - same as above !
 
 
 
@@ -348,6 +426,11 @@ pub enum SortError {
     InvalidInitialAddress,
 }
 
+#[derive(Debug)]
+pub enum CostError {
+    LessNodesThanOriginal,
+    MoreNodesthanOriginal,
+}
 
 
 // TODO:
