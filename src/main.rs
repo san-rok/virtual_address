@@ -36,7 +36,7 @@ fn main() {
 
     let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::from_cfg(&cfg);
 
-    let topsort = bbsort(&vag, vag.address()).unwrap();
+    let topsort = cfg_sort(&vag, vag.address()).unwrap();
 
     // let topsort = vag.weighted_order();
     println!("{:x?}", topsort);
@@ -75,7 +75,7 @@ fn main() {
 
 
         
-        if let Ok(topsort) = bbsort(&vag, vag.address()) {
+        if let Ok(topsort) = cfg_sort(&vag, vag.address()) {
             let cfg_order = cfg_cost(&vag, vag.address(), &topsort).unwrap();
             println!("{}", cfg_order);
             if cfg_order.is_better() {count_better += 1;} 
