@@ -17,7 +17,7 @@ use kendalls::tau_b;
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
-pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId>, SortError> 
+fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId>, SortError> 
     where
         G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
             NodeWeight<Node = G::NodeId>,
@@ -66,7 +66,26 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
 }
 
 
-pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError> 
+/// Returns an order on the blocks of the given control flow graph, such that
+/// the overall jumps' weights are locally minimalized.
+/// This local minimalization is achieved by Kahn's algorithm spiced up with the
+/// following tiebraking heuristic: whenever in a step of the Kahn's algorithm
+/// there are multiple nodes to put in the order we choose that which has the most
+/// incoming edges (originally) AND the most number of instructions.
+/// 
+/// # Arguments
+/// 
+/// * `g` - the control flow graph (satisfying several natural traits from petgraph);
+/// * `entry` - the starting blocks address (which hence must be a node of g);
+/// 
+/// # Errors
+/// 
+/// See below!
+/// 
+/// etc.
+/// 
+
+pub fn cfg_sort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError> 
     where
         G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + 
             NodeWeight<Node = G::NodeId>,
@@ -91,50 +110,22 @@ pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError>
 
 }
 
-/*
-// cost of given order 
-pub fn cost<G>(g: G, entry: G::NodeId, order: &[G::NodeId]) -> (usize, bool)
-    where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
-        NodeWeight<Node = G::NodeId>,
-    <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
-{
-    // TODO: what if the input is bad again ?
-    let vag: VirtualAddressGraph<G::NodeId> = to_vag(g, entry).unwrap();
-
-    let mut initial_order: Vec<G::NodeId> = Vec::new();
-    for node in vag.nodes().keys() {
-        initial_order.push(node.id().unwrap());
-    }
-    
-    // original order = ascending ids
-    initial_order.sort();
-
-    println!("starting block's address: {:x}", vag.address().id().unwrap());
-
-    // TODO: legit error handling
-    match initial_order.len().cmp(&order.len()) {
-        Ordering::Less => { panic!("there were less nodes originally") }
-        Ordering::Greater => { panic!("some nodes are missing from the order") }
-        Ordering::Equal => (),
-    }
-
-    for i in 0..initial_order.len() {
-        println!("{:x}, {:x}", initial_order[i], order[i]);
-    }
-
-    let kendall_tau = tau_b(&initial_order, order).unwrap().0;
-    let original_cost: usize = vag.cost_of_order(initial_order);
-    let sorted_cost: usize = vag.cost_of_order(order.to_vec());
-
-    println!("kendall tau: {:#?}", kendall_tau);
-    println!("cost of original order: {}", original_cost);
-    println!("cost of topological sort: {} \n", sorted_cost);
-
-    (sorted_cost, original_cost >= sorted_cost)
-}
-*/
-
+/// Given an order on the block of a control flow graph, it returns an instance of the CfgOrder 
+/// struct (for definition see below) to gain information about the performance of that order
+/// compared to the original order of the blocks (by default: ascending by the addresses)
+/// 
+/// # Arguments
+/// 
+/// * `g`       - the control flow graph (satisfying several natural traits from petgraph);
+/// * `entry`   - the starting blocks address (which hence must be a node of g);
+/// * `order`   - the order of the block's addresses we would like to test/compare;
+/// 
+/// # Errors
+/// 
+/// See below!
+/// 
+/// etc.
+/// 
 
 pub fn cfg_cost<G> (g: G, entry: G::NodeId, order: &[G::NodeId]) -> Result<CfgOrder<G::NodeId>, CostError>
     where
@@ -177,6 +168,23 @@ pub fn cfg_cost<G> (g: G, entry: G::NodeId, order: &[G::NodeId]) -> Result<CfgOr
 
 }
 
+
+/// Given an order on the control flow graph's blocks it stores information about
+/// its optimality (in the previous sense), compared to the original order of the blocks
+/// 
+/// # Fields
+/// 
+/// * `entry`           - the starting blocks address (note: it can happen that in the original 
+///                       order its not the first element);
+/// * `order`           - the order we would like to test;
+/// * `original_order`  - the original order of the blocks (ascending by addresses);
+/// * `cost`            - the cost of the given order;
+/// * `original_cost`   - the cost of the original order;
+/// * `kendall_tau`     - it measures the difference between two orders (in our case the original
+///                       and the given), it's a real number between -1 and +1, where -1 means the
+///                       given order is reversing the original, menawhile +1 means that the two orders
+///                       are the same;
+/// 
 pub struct CfgOrder<N>
     where N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
 {
@@ -210,9 +218,6 @@ impl<N> Display for CfgOrder<N>
         writeln!(f, "cost of topological sort: {} \n", self.cost)
     }
 }
-
-
-// TODO: implement display for CfgOrder - same as above !
 
 
 
@@ -262,7 +267,7 @@ mod test {
         );
 
         let vag = to_vag(&vag, address).unwrap();
-        let result = bbsort(&vag, Vertex::Id(address));
+        let result = cfg_sort(&vag, Vertex::Id(address));
 
         assert_eq!(result.is_err_and(|x| x ==  SortError::UnreachableNodes), true);  
 
@@ -419,6 +424,18 @@ mod test {
 }
 
 // implement Debug trait by hand later !!
+
+/// The usual errors that can arose whenever we use the cfg_sort(g, entry) function.
+/// 
+/// # Variants
+/// 
+/// * `EmptyGraph`              - the input graph: g is empty;
+/// * `UnreachableNodes`        - from the given entry address we can not reach all the nodes of
+///                               the control flow graph;
+/// *`InvalidInitialAddress`    - there is no block in g at the given entry address;
+/// 
+/// etc.
+/// 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SortError {
     EmptyGraph,
@@ -426,16 +443,16 @@ pub enum SortError {
     InvalidInitialAddress,
 }
 
+/// The usual errors that can arose whenever we use the cfg_cost(g, entry, order) function.
+/// 
+/// # Variants
+/// 
+/// * `LessNodesThanOriginal` - the given order slice contains less nodes than g has;
+/// * `MoreNodesThanOriginal` - the given order slice contains more nodes than g has;
+
+
 #[derive(Debug)]
 pub enum CostError {
     LessNodesThanOriginal,
     MoreNodesthanOriginal,
 }
-
-
-// TODO:
-//      * some small graphs where the order can be check by hands -> is the same result, no panic
-//      * the target of an edge is not in the graph -> ??
-
-
-// 
