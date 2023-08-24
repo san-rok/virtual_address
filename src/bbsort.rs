@@ -10,7 +10,7 @@ use std::default::Default;
 use std::collections::HashMap;
 use std::cmp::*;
 
-use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoNeighborsDirected, GraphBase, Visitable};
+use petgraph::visit::{IntoNodeIdentifiers, IntoNeighbors, NodeIndexable, IntoNeighborsDirected, GraphBase};
 
 use kendalls::tau_b;
 
@@ -19,7 +19,7 @@ use kendalls::tau_b;
 
 pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId>, SortError> 
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + Visitable +
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
             NodeWeight<Node = G::NodeId>,
         <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
 {
@@ -29,43 +29,14 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
     }
 
     // if the given entry address is not a node of the graph, then return error
-    if g.node_identifiers().find(|&x| x == entry).is_none() {
+    if !g.node_identifiers().any(|x| x == entry) {
         return Err(SortError::InvalidInitialAddress);
     }
 
-    // the initial address of the given graph is the one with the smallest id
-    // IS THIS CORRECT AT ALL?
-    // let address = g.node_identifiers().min().ok_or(SortError::MissingInitialAddress).unwrap();
-
     let mut nodes: HashMap<Vertex<G::NodeId>, NoInstrBasicBlock<G::NodeId>> = HashMap::new();
 
-    // instead of goind through all the vertices in the given order
-    // we do this using a DFS - which is also used to check if the graph is connected
-    petgraph::visit::depth_first_search(&g, Some(entry), |event| {
-        if let petgraph::visit::DfsEvent::Finish(block, _) = event {
-            nodes.insert( 
-                Vertex::Id(block),
-                NoInstrBasicBlock::<G::NodeId>::new(
-                    Vertex::Id(block), 
-                    g.weight(block), 
-                    g.neighbors_directed(block, petgraph::Direction::Incoming).map(Vertex::Id).collect(),
-                    g.neighbors_directed(block, petgraph::Direction::Outgoing).map(Vertex::Id).collect(),
-                    g.neighbors_directed(block, petgraph::Direction::Incoming).count(),
-                )
-            );
-        }
-    });
-
-    if nodes.iter().count() != g.node_identifiers().count() {
-        println!("address of the graph: {:x}", entry);
-        println!("number of find nodes: {}",nodes.iter().count());
-        println!("number of nodes: {}", g.node_identifiers().count());
-        return Err(SortError::NotStronglyConnectedGraph);
-    }
-
-    // DFS for finding not connected components
-
-    /*
+    // going over all the vertices of the given input graph 
+    // we collect the relevant data in a hashmap, which will be used later in the VAGraph instance
     for block in g.node_identifiers() {
         nodes.insert( 
             Vertex::Id(block),
@@ -78,13 +49,14 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
             )
         );
     }
-    */
 
-    let vag: VirtualAddressGraph<G::NodeId> = VirtualAddressGraph::new(
-        // *nodes.keys().min().unwrap(),
+    let mut vag: VirtualAddressGraph<G::NodeId> = VirtualAddressGraph::new(
         Vertex::Id(entry),
         nodes,
     );
+
+    // deleting the outging edges - whenever we found one: print out !
+    vag.erase_outgoing_edges();
 
     Ok(vag)
 
@@ -93,27 +65,26 @@ pub fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId
 
 pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError> 
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + Visitable +
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + 
             NodeWeight<Node = G::NodeId>,
         <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex, 
 {
 
-    // propagating the reading errors further
-    let topsort = to_vag(g, entry)?.weighted_order();
-    Ok(topsort)
+    // reading and converting the data (with error propagation)
+    let vag = to_vag(g, entry)?;
 
-    /*
-    // NOT GOOD YET!!
-    match to_vag(g) {
-        Ok(vag) => Ok(vag.weighted_order()),
-        Err(err) => Err(err),
+    // if there exists a node which we can not reach from entry -> error
+    let unreachable = vag.unreachable_from_start();
+    if !unreachable.is_empty() {
+        println!("from the start: {:x}, the following nodes are not reachable:", entry);
+        for id in unreachable {
+            println!("{:x}", id.id().unwrap());
+        }
+        return Err(SortError::UnreachableNodes);
     }
-    */
-    /*
-    if let Ok(vag) = to_vag(g) {
-        Ok(vag.weighted_order())
-    }
-    */
+
+    let topsort = vag.weighted_order();
+    Ok(topsort)
 
 }
 
@@ -121,11 +92,11 @@ pub fn bbsort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError>
 // cost of given order 
 pub fn cost<G>(g: G, entry: G::NodeId, order: &[G::NodeId]) -> (usize, bool)
     where
-        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected + Visitable +
+        G:  IntoNodeIdentifiers + IntoNeighbors + NodeIndexable + IntoNeighborsDirected +
         NodeWeight<Node = G::NodeId>,
     <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
 {
-    // NOT GOOD YET !!
+    // TODO: what if the input is bad again ?
     let vag: VirtualAddressGraph<G::NodeId> = to_vag(g, entry).unwrap();
 
     let mut initial_order: Vec<G::NodeId> = Vec::new();
@@ -208,7 +179,10 @@ mod test {
             nodes
         );
 
-        assert_eq!(to_vag(&vag, address).is_err_and(|x| x ==  SortError::NotStronglyConnectedGraph), true);  
+        let vag = to_vag(&vag, address).unwrap();
+        let result = bbsort(&vag, Vertex::Id(address));
+
+        assert_eq!(result.is_err_and(|x| x ==  SortError::UnreachableNodes), true);  
 
     }
 
@@ -296,36 +270,25 @@ mod test {
 
         let out_vag = to_vag(&vag, address).unwrap();
 
-        // TBC !!
-        // it is probable that dfs won't work :(
-
-        assert_eq!(vag.nodes().len(), out_vag.nodes().len());
-
-        // println!("{:#x?}", out_vag);
-
-        // assert_eq!(to_vag(&vag, address).is_err_and(|x| x ==  SortError::NotStronglyConnectedGraph), true);  
+        assert_ne!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x1))).targets().len(), vag.node_at_target(Vertex::Id(0x1)).targets().len());
+        assert_eq!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x1))).targets().len(), 0);
 
     }
 
 }
 
+// implement Debug trait by hand later !!
 #[derive(Debug, PartialEq, Eq)]
 pub enum SortError {
     EmptyGraph,
-    NotStronglyConnectedGraph,
+    UnreachableNodes,
     InvalidInitialAddress,
-    MissingInitialAddress,
 }
 
-// implement Debug trait by hand later !!
 
-// add an initial address input !
 
 // TODO:
-//      * empty graph -> Err
-//      * not connected graph -> Err
 //      * some small graphs where the order can be check by hands -> is the same result, no panic
-//      * no initial address -> Err (?)
 //      * the target of an edge is not in the graph -> ??
 
 
