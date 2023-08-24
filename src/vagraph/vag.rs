@@ -138,6 +138,11 @@ impl<N: VAGNodeId> NoInstrBasicBlock<N> {
         &self.targets
     }
 
+    // a mutable reference of target blocks' addresses
+    fn targets_mut(&mut self) -> &mut HashSet<Vertex<N>> {
+        &mut self.targets
+    }
+
     // a hashset reference of source blocks' addresses
     pub fn sources(&self) -> &HashSet<Vertex<N>> {
         &self.sources
@@ -598,7 +603,7 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         for (source, target) in in_edges {
             let node = self.node_at_target_mut(*target);
             // delete the outsider source node's id
-            node.sources.remove(&source);
+            node.sources.remove(source);
             // decrease the indegree of the given node (in the component)
             node.decrease_indegree();
             // insert the new Source vertex - if it's not in yet, then add +1 to the indegree
@@ -734,6 +739,53 @@ impl<N: VAGNodeId> VirtualAddressGraph<N> {
         }
     }
 
+    // erase those edges that go out of the graph and hence not relevant for the ordering
+    // note: in such a case we print out the deleted edges' ids to let the user know
+    // note:    in general we think adout VAGraph instances without such outgoing edges
+    //          hence this method is only used when we generate a VAGraph from a given graph-like input
+    //          (even if the presence of such edges does not matter for our algorithm - which can not see them at all)
+    pub fn erase_outgoing_edges(&mut self) {
+        let nodes: HashSet<Vertex<N>> = self.nodes().keys().copied().collect();
+
+
+        for (id, block) in self.nodes_mut() {
+            block
+                .targets_mut()
+                .retain(|x|{
+                    let is_valid_edge = nodes.contains(x);
+                    if !is_valid_edge {
+                        println!("the edge: ({},{}) is leaving the graph, hence deleted", id.id().unwrap(), x.id().unwrap());
+                    }   
+                    is_valid_edge
+                });
+        }
+    }
+
+    // running a DFS it checks whether if all the nodes are reachable from the entry or not in the VAGraph
+    // TODO: make it a bit more sophisticated
+    pub fn unreachable_from_start(&self) -> HashSet<Vertex<N>> {
+
+        // the reachable nodes will be collected in reachable hashset
+        let mut reachable: HashSet<Vertex<N>> = HashSet::new();
+
+        depth_first_search(&self, Some(self.address()), |event| {
+            if let DfsEvent::Discover(block, _) = event {
+                reachable.insert( block );
+            }
+        });
+
+        // the unreachable nodes are obtained using difference
+        let unreachable: HashSet<Vertex<N>> = self
+                .nodes()
+                .keys()
+                .copied()
+                .collect::<HashSet<Vertex<N>>>()
+                .difference(&reachable)
+                .copied()
+                .collect();
+        
+        unreachable
+    }
 
 
 }
