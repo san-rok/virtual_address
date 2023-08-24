@@ -236,7 +236,7 @@ mod test {
 
 
     #[test]
-    fn filtered_targets() {
+    fn filtered_targets_two_nodes() {
 
         let address: Vertex<u64> = Vertex::Id(0x0);
         let mut nodes: HashMap<Vertex<u64>, NoInstrBasicBlock<u64>> = HashMap::new();
@@ -274,6 +274,65 @@ mod test {
         assert_eq!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x1))).targets().len(), 0);
 
     }
+
+
+    #[test]
+    fn filtered_targets_three_nodes_multiple_phantom_edges() {
+
+        let address: Vertex<u64> = Vertex::Id(0x0);
+        let mut nodes: HashMap<Vertex<u64>, NoInstrBasicBlock<u64>> = HashMap::new();
+
+        nodes.insert(
+            Vertex::Id(0x0),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x0),
+                1,
+                std::collections::HashSet::<Vertex<u64>>::new(),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x1), Vertex::Id(0x2), Vertex::Id(0x6)]),
+                0
+            )
+        );
+
+        nodes.insert(
+            Vertex::Id(0x1),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x1),
+                10,
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x1)]),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x2), Vertex::Id(0x7), Vertex::Id(0x9)]),
+                1
+            )
+        );
+
+        nodes.insert(
+            Vertex::Id(0x2),
+            NoInstrBasicBlock::new(
+                Vertex::Id(0x2),
+                5,
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x0), Vertex::Id(0x1)]),
+                std::collections::HashSet::<Vertex<u64>>::from([Vertex::Id(0x6), Vertex::Id(0x7)]),
+                2
+            )
+        );
+
+        let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::new(
+            address,
+            nodes
+        );
+
+        let out_vag = to_vag(&vag, address).unwrap();
+
+        assert_ne!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x0))).targets().len(), vag.node_at_target(Vertex::Id(0x0)).targets().len());
+        assert_ne!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x1))).targets().len(), vag.node_at_target(Vertex::Id(0x1)).targets().len());
+        assert_ne!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x2))).targets().len(), vag.node_at_target(Vertex::Id(0x2)).targets().len());
+
+        
+        assert_eq!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x0))).targets().len(), 2);
+        assert_eq!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x1))).targets().len(), 1);
+        assert_eq!(out_vag.node_at_target(Vertex::Id(Vertex::Id(0x2))).targets().len(), 0);
+
+    }
+
 
 }
 
