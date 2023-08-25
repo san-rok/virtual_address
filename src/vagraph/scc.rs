@@ -1,12 +1,10 @@
-
 // use std::fmt::Display;
 // use std::hash::Hash;
 
-use std::collections::{HashSet, HashMap};
 use petgraph::algo::tarjan_scc;
+use std::collections::{HashMap, HashSet};
 
 use crate::vagraph::vag::*;
-
 
 #[derive(Debug)]
 pub struct Component<'a, N: VAGNodeId> {
@@ -21,7 +19,6 @@ pub struct Component<'a, N: VAGNodeId> {
 impl<'a, N: VAGNodeId> Component<'a, N> {
     // given a VAG instance returns a vector of its components
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Vec<Self> {
-
         let mut components: Vec<Self> = Vec::new();
 
         // tarjan_scc -> vector of strongly connected component's addresses vector
@@ -38,18 +35,15 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
                 }
             }
 
-            components.push(
-                Self { 
-                    graph: vag,
-                    component: strongly,
-                    // the id of a component is the minimal nodeid inside
-                    compid: *comp.iter().min().unwrap(),
-                }
-            )
+            components.push(Self {
+                graph: vag,
+                component: strongly,
+                // the id of a component is the minimal nodeid inside
+                compid: *comp.iter().min().unwrap(),
+            })
         }
 
         components
-
     }
 
     // returns a reference to the original graph
@@ -69,9 +63,7 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
     // checks if a given node is in the component
     fn contains(&self, node: Vertex<N>) -> bool {
-        self
-            .nodes()
-            .contains(&node)
+        self.nodes().contains(&node)
     }
 
     // checks if a component is trivial, i.e. it's a single node
@@ -81,33 +73,29 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
 
     // returns a reference to the targets of a given vertex in the component
     fn targets(&self, node: Vertex<N>) -> &HashSet<Vertex<N>> {
-        self
-            .whole()
-            .node_at_target(node)
-            .targets()
+        self.whole().node_at_target(node).targets()
     }
-
 
     // a collection of incoming edges
     fn incoming_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
-
         let mut incoming: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
-        for (&source, block) in 
-                self.whole().nodes().iter().filter(|(&x,_)| !self.contains(x)) {
-            for &target in 
-                    block.targets().iter().filter(|&x| self.contains(*x)) {        
+        for (&source, block) in self
+            .whole()
+            .nodes()
+            .iter()
+            .filter(|(&x, _)| !self.contains(x))
+        {
+            for &target in block.targets().iter().filter(|&x| self.contains(*x)) {
                 incoming.push((source, target));
             }
         }
 
         incoming
-
     }
 
     // a collection of outgoing edges
     fn outgoing_edges(&self) -> Vec<(Vertex<N>, Vertex<N>)> {
-
         let mut outgoing: Vec<(Vertex<N>, Vertex<N>)> = Vec::new();
 
         for &node in self.nodes() {
@@ -126,21 +114,17 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
     // the targets of the outgoing edges are merged into one vertex
     // MAYBE: create an enum that sets if acyclic or not
     pub fn to_acyclic_vag(&self) -> VirtualAddressGraph<N> {
-
         // let address = self.nodes().iter().min().unwrap();
 
         let mut nodes: HashMap<Vertex<N>, NoInstrBasicBlock<N>> = HashMap::new();
         for node in self.nodes() {
             // TODO: do this without clone()
             // MAYBE: rewrite the whole Kahn's algorithm to accept avoided edges, vertices, etc.
-            nodes.insert(
-                *node,
-                self.whole().node_at_target(*node).clone()
-            );
+            nodes.insert(*node, self.whole().node_at_target(*node).clone());
         }
 
         let mut vag: VirtualAddressGraph<N> = VirtualAddressGraph::new(self.compid(), nodes);
-        
+
         // all the incoming edges of the component
         let ins: Vec<(Vertex<N>, Vertex<N>)> = self.incoming_edges();
         // all the outgoing edges of the component
@@ -168,12 +152,5 @@ impl<'a, N: VAGNodeId> Component<'a, N> {
         vag.erase_edges(&backs);
 
         vag
-
     }
-
-
-    
-
-
-
 }

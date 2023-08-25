@@ -1,4 +1,3 @@
-
 #![feature(impl_trait_in_assoc_type)]
 
 // PART01: Binary struct
@@ -17,7 +16,7 @@ mod vagraph;
 use crate::vagraph::vag::*;
 
 mod bbsort;
-pub use crate::bbsort::{cfg_sort, cfg_cost};
+pub use crate::bbsort::{cfg_cost, cfg_sort};
 pub use crate::vagraph::vag::NodeWeight;
 
 /*
@@ -44,13 +43,13 @@ fn main() {
 
     let topsort: Vec<u64> = topsort.iter().map(|&x| x.id().unwrap()).collect();
     println!("cost of order: {}", vag.cost_of_order(&topsort));
-    
-    // test dags 
+
+    // test dags
     let file = std::fs::File::open("cfg.yaml").unwrap();
     let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
     let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
 
-    
+
     // let vag = vags.iter().find(|x| x.address().id().unwrap() == 0x184502670).unwrap();
     // let topsort = bbsort(vag);
     // cost(vag, &topsort);
@@ -68,20 +67,20 @@ fn main() {
         /*
         match bbsort(&vag) {
             Ok(topsort) => {
-                if cost(&vag, &topsort).1 { counter += 1; }    
+                if cost(&vag, &topsort).1 { counter += 1; }
             }
             Err(err) => Err(err),
         }
         */
 
 
-        
+
         if let Ok(topsort) = cfg_sort(&vag, vag.address()) {
             let cfg_order = cfg_cost(&vag, vag.address(), &topsort).unwrap();
             println!("{}", cfg_order);
-            if cfg_order.is_better() {count_better += 1;} 
+            if cfg_order.is_better() {count_better += 1;}
         }
-        
+
 
         // let topsort = bbsort(&vag);
         // if cost(&vag, &topsort).1 { counter += 1; }
@@ -96,8 +95,3 @@ fn main() {
 
 
 */
-
-
-
-
-

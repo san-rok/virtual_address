@@ -1,13 +1,9 @@
-
 use std::collections::{BinaryHeap, HashMap};
-
 
 use crate::vagraph::vag::*; //{VirtualAddressGraph, NoInstrBasicBlock};
 
 // use std::fmt::Display;
 // use std::hash::Hash;
-
-
 
 #[derive(Debug)]
 struct KahnBasicBlock<'a, N: VAGNodeId> {
@@ -63,7 +59,6 @@ impl<'a, N: VAGNodeId> KahnBasicBlock<'a, N> {
     }
 }
 
-
 #[derive(Debug)]
 pub struct KahnGraph<'a, N: VAGNodeId> {
     address: Vertex<N>,
@@ -73,24 +68,16 @@ pub struct KahnGraph<'a, N: VAGNodeId> {
 impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
     // generates a KahnGraph instance from a VAG
     pub fn from_vag(vag: &'a VirtualAddressGraph<N>) -> Self {
-
         let mut nodes: HashMap<Vertex<N>, KahnBasicBlock<N>> = HashMap::new();
 
         for (node, block) in vag.nodes() {
-            nodes.insert(
-                *node,
-                KahnBasicBlock::<N>{
-                    block,
-                    deleted: 0,
-                }
-            );
+            nodes.insert(*node, KahnBasicBlock::<N> { block, deleted: 0 });
         }
 
-        KahnGraph { 
-            address: vag.address(), 
+        KahnGraph {
+            address: vag.address(),
             nodes,
         }
-
     }
 
     /*
@@ -128,24 +115,20 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
 
     // a mutable reference for the block at given target
     fn node_at_target_mut(&mut self, target: &Vertex<N>) -> &mut KahnBasicBlock<'a, N> {
-
-        self
-            .nodes_mut()
-            .get_mut(target)
-            .unwrap()
+        self.nodes_mut().get_mut(target).unwrap()
 
         // let pos = self.position(target);
         // &mut self.nodes_mut()[pos]
     }
 
     // reduces the indegree of a block during the iterations of Kahn's algorithm
-    // this corresponds to the edge deletions 
+    // this corresponds to the edge deletions
     // note:    the nummber of deleted edges are counted in the KBB.deleted field
     //          if the deleted == indegree -> the vertex lost all of its incoming edges
     //          hence popped for a possible next vertex for the iteration
     fn reduce_indegree(&mut self, target: &Vertex<N>) -> Option<&'a NoInstrBasicBlock<N>> {
         let kbb = self.node_at_target_mut(target);
-        
+
         kbb.recude_by_one();
 
         match kbb.indegree() == kbb.deleted() {
@@ -161,32 +144,29 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
         }
     }
 
-    // an implementation of the weighted version of Kahn's topological sorting algorithm 
+    // an implementation of the weighted version of Kahn's topological sorting algorithm
     // for directed acyclic graphs
-    // the weights are used for tie breaking when there are more than one vertex with 
+    // the weights are used for tie breaking when there are more than one vertex with
     // zero indegree: sorted by two keys: original in-degree and then lengths of block
     // note:    the output vector must contain Vertex<N> elements since we will run it on
     //          the subgraphs obtained from strongly connected components
     pub fn kahn_algorithm(&mut self) -> Vec<Vertex<N>> {
-
         // topsort: the topological order of the basic blocks - collecting only the addresses
         let mut topsort: Vec<Vertex<N>> = Vec::new();
         // an auxiliary vector: the zero in-degree vertices of the running algorithm
         let mut visit: BinaryHeap<&NoInstrBasicBlock<N>> = BinaryHeap::new();
 
-
         // initialization: collect the initially zero in-degree vertices
         // the binary heap orders them by length
         for kahnblock in self.nodes().values() {
             if kahnblock.indegree() == 0 {
-                visit.push( kahnblock.block());
+                visit.push(kahnblock.block());
             }
         }
 
         while let Some(node) = visit.pop() {
             // reduce the in-degrees of the actual vertex's target(s)
             for target in node.targets() {
-
                 if let Some(block) = self.reduce_indegree(target) {
                     visit.push(block);
                 }
@@ -200,7 +180,5 @@ impl<'a, N: VAGNodeId> KahnGraph<'a, N> {
 
         // return topological order
         topsort
-
     }
-
 }

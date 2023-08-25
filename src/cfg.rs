@@ -1,15 +1,11 @@
-
 use iced_x86::*;
 
-use std::fmt;
 use std::cmp::*;
+use std::fmt;
 
 use std::collections::BTreeMap;
 
 use crate::binary::*;
-
-
-
 
 // Basic Block: consecutive instructions up until the first jump
 #[derive(Clone, Debug)]
@@ -43,21 +39,19 @@ impl PartialOrd for BasicBlock {
 ///////////////////////////////////////////////////////////////
 
 impl BasicBlock {
-
     fn from_address(binary: &Binary, va: u64) -> Self {
-
-        let mut bb: BasicBlock = BasicBlock{
+        let mut bb: BasicBlock = BasicBlock {
             address: va,
             instructions: Vec::new(),
             targets: Vec::new(),
         };
 
         let byte_slice = binary.virtual_address_range(va..).unwrap();
-        
+
         // set ip: given virtual address
         let mut decoder = Decoder::with_ip(64, byte_slice, va, 0);
-    
-        let mut instr = Instruction::default();   
+
+        let mut instr = Instruction::default();
 
         decoder.decode_out(&mut instr);
         bb.instructions.push(instr);
@@ -66,8 +60,7 @@ impl BasicBlock {
 
         loop {
             match instr.flow_control() {
-                FlowControl::Next |
-                FlowControl::Call => {
+                FlowControl::Next | FlowControl::Call => {
                     decoder.decode_out(&mut instr);
                     bb.instructions.push(instr);
                 }
@@ -80,7 +73,7 @@ impl BasicBlock {
                 }
                 FlowControl::UnconditionalBranch => {
                     if instr.is_jmp_short_or_near() {
-                        bb.targets.push(instr.next_ip()); 
+                        bb.targets.push(instr.next_ip());
                         bb.targets.push(instr.near_branch_target());
                     } else if instr.is_jmp_far() {
                         bb.targets.push(instr.next_ip());
@@ -92,7 +85,7 @@ impl BasicBlock {
                 }
                 /* FlowControl::Call => {
                     if instr.is_call_near() {
-                        bb.targets.push(instr.next_ip()); 
+                        bb.targets.push(instr.next_ip());
                         bb.targets.push(instr.near_branch_target());
                     } else if instr.is_call_far() {
                         bb.targets.push(instr.next_ip());
@@ -102,19 +95,18 @@ impl BasicBlock {
                     }
                     break;
                 } */
-                FlowControl::Return | 
-                FlowControl::Interrupt | 
-                FlowControl::Exception | 
-                FlowControl::XbeginXabortXend |
-                FlowControl::IndirectBranch | 
-                FlowControl::IndirectCall => {
+                FlowControl::Return
+                | FlowControl::Interrupt
+                | FlowControl::Exception
+                | FlowControl::XbeginXabortXend
+                | FlowControl::IndirectBranch
+                | FlowControl::IndirectCall => {
                     break;
                 }
             }
         }
 
         bb
-
     }
 
     // BasicBlock -> address of the last byte
@@ -127,9 +119,11 @@ impl BasicBlock {
 
     // BasicBlock + va -> address of the next valid instruction (if va = start then itself)
     fn next_valid_instr(&self, va: u64) -> Result<u64, String> {
-
         // TODO: what if it returns the next basic block's address ??
-        let index = self.instructions.iter().position(|x| x.ip() <= va && va < x.next_ip());
+        let index = self
+            .instructions
+            .iter()
+            .position(|x| x.ip() <= va && va < x.next_ip());
         match index {
             Some(i) => {
                 if self.instructions[i].ip() == va {
@@ -138,33 +132,35 @@ impl BasicBlock {
                     Ok(self.instructions[i].next_ip())
                 }
             }
-            None => {
-                Err(String::from("address is outside of basic block's range error"))
-            }
+            None => Err(String::from(
+                "address is outside of basic block's range error",
+            )),
         }
     }
-
 
     // BasicBlock + va -> cut the BB into two BBs at next_valid_instr(va)
     // the second block starts at next_valid_instr(va)
     fn cut_block(self, va: u64) -> Vec<BasicBlock> {
-
         let valid_va = self.next_valid_instr(va);
         match valid_va {
             Ok(addr) => {
                 if self.address < addr && addr <= self.end_address() {
-                    let cut_index = self.instructions.iter().position(|&x| x.ip() == addr).unwrap();
+                    let cut_index = self
+                        .instructions
+                        .iter()
+                        .position(|&x| x.ip() == addr)
+                        .unwrap();
                     vec![
                         BasicBlock {
                             address: self.address,
                             instructions: self.instructions[..cut_index].to_vec(),
                             targets: vec![addr],
                         },
-                        BasicBlock{
+                        BasicBlock {
                             address: addr,
                             instructions: self.instructions[cut_index..].to_vec(),
                             targets: self.targets,
-                        }
+                        },
                     ]
                 } else {
                     vec![self]
@@ -173,12 +169,9 @@ impl BasicBlock {
             Err(_) => {
                 vec![self]
             }
-
         }
-
     }
 
-    
     // BasicBlock -> address (u64)
     pub fn address(&self) -> u64 {
         self.address
@@ -190,21 +183,13 @@ impl BasicBlock {
     }
 
     // BasicBlock -> instructions (&[Instruction])
-    pub fn instructions(&self)-> &[Instruction] {
+    pub fn instructions(&self) -> &[Instruction] {
         &self.instructions
     }
-
-
 }
-
-
-
-
-
 
 impl fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        
         write!(f, "address:\n       {:016x}\n", &self.address)?;
         writeln!(f, "basic block:")?;
 
@@ -213,10 +198,9 @@ impl fmt::Display for BasicBlock {
         let mut formatter = MasmFormatter::new();
         formatter.options_mut().set_branch_leading_zeros(false);
         formatter.options_mut().set_uppercase_hex(false);
-        
-        for instruction in &self.instructions {
 
-            write!(f,"      {:016x}: ", instruction.ip())?;
+        for instruction in &self.instructions {
+            write!(f, "      {:016x}: ", instruction.ip())?;
 
             let mut output = String::new();
             formatter.format(instruction, &mut output);
@@ -224,17 +208,16 @@ impl fmt::Display for BasicBlock {
 
             writeln!(f)?;
         }
-        
+
         writeln!(f, "target(s):")?;
 
         for element in &self.targets {
-            writeln!(f,"      {:016x}", element)?;
+            writeln!(f, "      {:016x}", element)?;
         }
 
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -243,7 +226,6 @@ mod tests {
     // TEST: next_valid_instr() method
     #[test]
     fn next_valid_va() {
-
         let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
         let binary = Binary::from_elf(path);
 
@@ -251,10 +233,18 @@ mod tests {
 
         let bb = BasicBlock::from_address(&binary, virtual_address);
 
-
-        assert_eq!(Err(String::from("address is outside of basic block's range error")), bb.next_valid_instr(0x8838));
-        assert_eq!(Err(String::from("address is outside of basic block's range error")), bb.next_valid_instr(0x8853));
-
+        assert_eq!(
+            Err(String::from(
+                "address is outside of basic block's range error"
+            )),
+            bb.next_valid_instr(0x8838)
+        );
+        assert_eq!(
+            Err(String::from(
+                "address is outside of basic block's range error"
+            )),
+            bb.next_valid_instr(0x8853)
+        );
 
         assert_eq!(Ok(0x8847), bb.next_valid_instr(0x8842));
         assert_eq!(Ok(0x8847), bb.next_valid_instr(0x8846));
@@ -262,9 +252,6 @@ mod tests {
         assert_eq!(Ok(0x884e), bb.next_valid_instr(0x884e));
         assert_eq!(Ok(0x8853), bb.next_valid_instr(0x8852));
     }
-
-
-
 }
 
 // Control Flow Graph: graph of basic blocks
@@ -273,33 +260,25 @@ pub struct ControlFlowGraph {
     blocks: Vec<BasicBlock>,
 }
 
-
 impl ControlFlowGraph {
-
     // explore control flow graph from a given virtual address (using DFS)
     pub fn from_address(binary: &Binary, va: u64) -> Self {
-
         let mut blocks: BTreeMap<u64, BasicBlock> = BTreeMap::new();
         let mut addresses: Vec<u64> = Vec::new();
-    
+
         addresses.push(va);
-    
+
         while let Some(address) = addresses.pop() {
-    
             let bb = BasicBlock::from_address(binary, address);
-    
+
             // is this clone too much?
-            let mut targets  = bb.targets().to_vec();
-    
+            let mut targets = bb.targets().to_vec();
+
             blocks.insert(bb.address(), bb);
-    
+
             while let Some(target) = targets.pop() {
-    
-                let cut = blocks
-                    .range(..target)
-                    .next_back()
-                    .map(|(&x, _)| x);
-                
+                let cut = blocks.range(..target).next_back().map(|(&x, _)| x);
+
                 match cut {
                     Some(addr) if target <= blocks.get(&addr).unwrap().end_address() => {
                         let tmp_block = blocks.remove(&addr).unwrap();
@@ -307,7 +286,7 @@ impl ControlFlowGraph {
                         for i in cut_blocks {
                             blocks.insert(i.address(), i);
                         }
-                    } 
+                    }
                     _ => {
                         if !addresses.contains(&target) {
                             addresses.push(target);
@@ -320,7 +299,7 @@ impl ControlFlowGraph {
         let mut blocks: Vec<BasicBlock> = blocks.into_values().collect::<Vec<BasicBlock>>();
         blocks.sort();
 
-        ControlFlowGraph{
+        ControlFlowGraph {
             address: va,
             blocks,
         }
@@ -335,14 +314,12 @@ impl ControlFlowGraph {
     pub fn blocks(&self) -> &[BasicBlock] {
         &self.blocks
     }
-    
+
     // from graph to .dot
     pub fn render_to<W: std::io::Write>(&self, output: &mut W) -> dot2::Result {
         dot2::render(self, output)
     }
-
 }
-
 
 impl<'a> dot2::Labeller<'a> for ControlFlowGraph {
     type Node = u64;
@@ -354,22 +331,23 @@ impl<'a> dot2::Labeller<'a> for ControlFlowGraph {
         dot2::Id::new("control_flow")
     }
 
-    // maps n to unique (valid .dot) identifier 
+    // maps n to unique (valid .dot) identifier
     fn node_id(&'a self, n: &Self::Node) -> dot2::Result<dot2::Id<'a>> {
         dot2::Id::new(format!("N0x{:x}", n))
     }
 
     // labels of nodes
     fn node_label(&'a self, n: &Self::Node) -> dot2::Result<dot2::label::Text<'a>> {
-        let label = self.blocks.iter().find(|&v| v.address() == *n).map(|v| format!("{}", v)).unwrap();
+        let label = self
+            .blocks
+            .iter()
+            .find(|&v| v.address() == *n)
+            .map(|v| format!("{}", v))
+            .unwrap();
 
-        Ok(dot2::label::Text::LabelStr(
-            label.into()
-        ))
+        Ok(dot2::label::Text::LabelStr(label.into()))
     }
-
 }
-
 
 impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
     type Node = u64;
@@ -383,13 +361,12 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
     // all edges of the graph
     fn edges(&'a self) -> dot2::Edges<'a, Self::Edge> {
-
         let mut edges: Vec<(u64, u64)> = Vec::new();
 
         for block in self.blocks() {
             let source = block.address();
             for target in block.targets() {
-                edges.push( (source, *target) );
+                edges.push((source, *target));
             }
         }
 
@@ -398,16 +375,13 @@ impl<'a> dot2::GraphWalk<'a> for ControlFlowGraph {
 
     // source node for the given edge
     fn source(&self, edge: &Self::Edge) -> Self::Node {
-        let &(s,_) = edge;
+        let &(s, _) = edge;
         s
     }
 
     // target node for the given edge
     fn target(&self, edge: &Self::Edge) -> Self::Node {
-        let &(_,t) = edge;
+        let &(_, t) = edge;
         t
     }
-
 }
-
-
