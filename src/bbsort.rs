@@ -88,7 +88,7 @@ where
 pub fn cfg_sort<G>(g: G, entry: G::NodeId) -> Result<Vec<G::NodeId>, SortError>
 where
     G: IntoNodeIdentifiers + IntoNeighbors + IntoNeighborsDirected + NodeWeight<Node = G::NodeId>,
-    <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
+    <G as GraphBase>::NodeId: Copy + Eq + Debug + Hash + Ord,
 {
     // reading and converting the data (with error propagation)
     let vag = to_vag(g, entry)?;
@@ -97,11 +97,11 @@ where
     let unreachable = vag.unreachable_from_start();
     if !unreachable.is_empty() {
         log::debug!(
-            "from the start: {:x}, the following nodes are not reachable:",
+            "from the start: {:x?}, the following nodes are not reachable:",
             entry
         );
         for id in unreachable {
-            log::debug!("{:x}", id.id().unwrap());
+            log::debug!("{:x?}", id.id().unwrap());
         }
         return Err(SortError::UnreachableNodes);
     }
@@ -133,11 +133,7 @@ pub fn cfg_cost<G>(
     order: &[G::NodeId],
 ) -> Result<CfgOrder<G::NodeId>, CostError>
 where
-    G: IntoNodeIdentifiers
-        + IntoNeighbors
-        + NodeIndexable
-        + IntoNeighborsDirected
-        + NodeWeight<Node = G::NodeId>,
+    G: IntoNodeIdentifiers + IntoNeighbors + IntoNeighborsDirected + NodeWeight<Node = G::NodeId>,
     <G as GraphBase>::NodeId: Copy + Eq + Debug + Hash + Ord + Default,
 {
     // TODO: what if the input is bad again ?
