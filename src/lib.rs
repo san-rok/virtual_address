@@ -18,6 +18,7 @@ use crate::vagraph::vag::*;
 
 mod bbsort;
 pub use crate::bbsort::{cfg_sort, cfg_cost};
+pub use crate::vagraph::vag::NodeWeight;
 
 /*
 fn main() {
