@@ -3,23 +3,23 @@
 
 // PART01: Binary struct
 
-pub mod binary;
+mod binary;
 use crate::binary::*;
 
 // PART02 + PART03.A: Basic Blocks & Control Flow Graph
 
-pub mod cfg;
+mod cfg;
 use crate::cfg::*;
 
 // PART03.B: "Optimal" list of basic blocks
 
-pub mod vagraph;
+mod vagraph;
 use crate::vagraph::vag::*;
 
-pub mod bbsort;
-use crate::bbsort::*;
+mod bbsort;
+pub use crate::bbsort::{cfg_sort, cfg_cost};
 
-
+/*
 fn main() {
 
     let path = String::from("/home/san-rok/projects/testtest/target/debug/testtest");
@@ -94,7 +94,7 @@ fn main() {
 }
 
 
-
+*/
 
 
 
