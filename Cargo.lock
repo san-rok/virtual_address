@@ -9,6 +9,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "cfg_sort"
+version = "0.1.0"
+dependencies = [
+ "dot2",
+ "either",
+ "goblin",
+ "hex",
+ "iced-x86",
+ "kendalls",
+ "log",
+ "petgraph",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "dot2"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -229,19 +245,3 @@ name = "unsafe-libyaml"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f28467d3e1d3c6586d8f25fa243f544f5800fec42d97032474e17222c2b75cfa"
-
-[[package]]
-name = "virtual_address"
-version = "0.1.0"
-dependencies = [
- "dot2",
- "either",
- "goblin",
- "hex",
- "iced-x86",
- "kendalls",
- "log",
- "petgraph",
- "serde",
- "serde_yaml",
-]
