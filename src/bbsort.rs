@@ -20,7 +20,7 @@ use kendalls::tau_b;
 fn to_vag<G>(g: G, entry: G::NodeId) -> Result<VirtualAddressGraph<G::NodeId>, SortError>
 where
     G: IntoNodeIdentifiers + IntoNeighbors + IntoNeighborsDirected + NodeWeight<Node = G::NodeId>,
-    <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex,
+    <G as GraphBase>::NodeId: Copy + Eq + Debug + Hash + Ord,
 {
     // if the given graph is empty, then return error
     if g.node_identifiers().count() == 0 {
@@ -60,7 +60,7 @@ where
     let outgoing_edges = vag.erase_outgoing_edges();
     log::debug!("the following edges leave the graph, hence deleted:");
     for (s, t) in outgoing_edges {
-        log::debug!("{:x} --> {:x}", s, t);
+        log::debug!("{:x?} --> {:x?}", s, t);
     }
 
     Ok(vag)
@@ -138,7 +138,7 @@ where
         + NodeIndexable
         + IntoNeighborsDirected
         + NodeWeight<Node = G::NodeId>,
-    <G as GraphBase>::NodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+    <G as GraphBase>::NodeId: Copy + Eq + Debug + Hash + Ord + Default,
 {
     // TODO: what if the input is bad again ?
     let vag: VirtualAddressGraph<G::NodeId> = to_vag(g, entry).unwrap();
@@ -187,10 +187,8 @@ where
 ///                       given order is reversing the original, menawhile +1 means that the two orders
 ///                       are the same;
 ///
-pub struct CfgOrder<N>
-where
-    N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
-{
+#[derive(Debug, Clone)]
+pub struct CfgOrder<N> {
     entry: N,
     order: Vec<N>,
     original_order: Vec<N>,
@@ -201,19 +199,19 @@ where
 
 impl<N> CfgOrder<N>
 where
-    N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
+    N: Copy + Eq + Debug + Hash + Ord + Default,
 {
     pub fn is_better(&self) -> bool {
         self.cost <= self.original_cost
     }
 }
 
-impl<N> Display for CfgOrder<N>
+impl<N: Display> Display for CfgOrder<N>
 where
     N: Copy + Eq + Debug + Display + Hash + Ord + LowerHex + Default,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "starting block's address: {:x}", self.entry).ok();
+        writeln!(f, "starting block's address: {}", self.entry).ok();
         writeln!(f, "original order, sorted order").ok();
         for i in 0..self.original_order.len() {
             writeln!(f, "{:x}, {:x}", self.original_order[i], self.order[i]).ok();

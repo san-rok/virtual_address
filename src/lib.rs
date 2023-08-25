@@ -3,17 +3,10 @@
 // PART01: Binary struct
 
 mod binary;
-use crate::binary::*;
-
 // PART02 + PART03.A: Basic Blocks & Control Flow Graph
-
 mod cfg;
-use crate::cfg::*;
-
 // PART03.B: "Optimal" list of basic blocks
-
 mod vagraph;
-use crate::vagraph::vag::*;
 
 mod bbsort;
 pub use crate::bbsort::{cfg_cost, cfg_sort};

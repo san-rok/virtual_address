@@ -23,9 +23,9 @@ pub trait NodeWeight {
     fn weight(&self, node: Self::Node) -> usize;
 }
 
-pub trait VAGNodeId: Copy + Eq + Debug + Display + Hash + Ord + LowerHex {}
+pub trait VAGNodeId: Copy + Eq + Debug + Hash + Ord {}
 
-impl<T: Copy + Eq + Debug + Display + Hash + Ord + LowerHex> VAGNodeId for T {}
+impl<T: Copy + Eq + Debug + Hash + Ord> VAGNodeId for T {}
 
 // at some point we would like to use phantom source and target nodes
 // to do so - with generic types - we need to introduce an enum with
@@ -52,7 +52,7 @@ impl<N: VAGNodeId> Vertex<N> {
 
 // display (it is needed for the test only)
 
-impl<N: VAGNodeId> Display for Vertex<N> {
+impl<N: VAGNodeId + LowerHex> Display for Vertex<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => write!(f, "Source"),
@@ -64,7 +64,7 @@ impl<N: VAGNodeId> Display for Vertex<N> {
 
 // lowerhex (it is needed for the test only)
 
-impl<N: VAGNodeId> LowerHex for Vertex<N> {
+impl<N: VAGNodeId + LowerHex> LowerHex for Vertex<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Source => write!(f, "Source"),
@@ -868,7 +868,7 @@ impl<'a, N: VAGNodeId> dot2::Labeller<'a> for VirtualAddressGraph<N> {
     // maps n to unique (valid .dot) identifier
     fn node_id(&'a self, n: &Self::Node) -> dot2::Result<dot2::Id<'a>> {
         // TODO: error handling
-        dot2::Id::new(format!("N0x{:x}", n.id().unwrap()))
+        dot2::Id::new(format!("N0x{:x?}", n.id().unwrap()))
     }
 
     // label of a node
@@ -876,7 +876,7 @@ impl<'a, N: VAGNodeId> dot2::Labeller<'a> for VirtualAddressGraph<N> {
         let label = self
             .nodes()
             .get_key_value(n)
-            .map(|(x, y)| format!("{:x}: {}", x.id().unwrap(), y.len()))
+            .map(|(x, y)| format!("{:x?}: {}", x.id().unwrap(), y.len()))
             .unwrap();
 
         Ok(dot2::label::Text::LabelStr(label.into()))
