@@ -9,7 +9,7 @@ mod cfg;
 mod vagraph;
 
 mod bbsort;
-pub use crate::bbsort::{cfg_cost, cfg_sort};
+pub use crate::bbsort::{cfg_cost, cfg_sort, SortError};
 pub use crate::vagraph::vag::NodeWeight;
 
 /*
