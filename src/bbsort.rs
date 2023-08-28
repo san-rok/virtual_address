@@ -6,12 +6,11 @@ use crate::vagraph::vag::*;
 use std::cmp::*;
 use std::collections::HashMap;
 use std::default::Default;
+use std::error::Error;
 use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
 
-use petgraph::visit::{
-    GraphBase, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, NodeIndexable,
-};
+use petgraph::visit::{GraphBase, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 use kendalls::tau_b;
 
@@ -478,6 +477,24 @@ pub enum SortError {
     UnreachableNodes,
     InvalidInitialAddress,
 }
+
+impl Display for SortError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyGraph => write!(f, "Cannot sort empty graph!"),
+            Self::UnreachableNodes => write!(
+                f,
+                "Cannot sort graph: some nodes are not reachable from the start node!"
+            ),
+            Self::InvalidInitialAddress => write!(
+                f,
+                "Cannot sort graph: the start node is missing from the graph!"
+            ),
+        }
+    }
+}
+
+impl Error for SortError {}
 
 /// The usual errors that can arose whenever we use the cfg_cost(g, entry, order) function.
 ///
