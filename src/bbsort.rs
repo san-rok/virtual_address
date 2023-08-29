@@ -222,6 +222,25 @@ mod test {
     use super::*;
 
     #[test]
+    fn missing_nodes() {
+        // test dags
+        let file = std::fs::File::open("badgraph.yaml").unwrap();
+        let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
+        let vag: VirtualAddressGraph<u64> = vags[0].to_vag();
+        // let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
+
+        let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
+        vag.render_to(&mut f).unwrap();
+        // dot -Tsvg test.dot > test.svg
+
+        let topsort = cfg_sort(&vag, Vertex::Id(0x180025fc0)).unwrap();
+        assert_eq!(vag.nodes().len(), topsort.len());
+
+        println!("{:#x?}", vag.nodes());
+        println!("{}", cfg_cost(&vag, Vertex::Id(0x180025fc0), &topsort).unwrap());
+    }
+
+    #[test]
     fn empty_graph() {
         let entry: Vertex<u64> = Vertex::Id(0x0);
         let vag: VirtualAddressGraph<u64> = VirtualAddressGraph::new(entry, HashMap::new());
