@@ -42,6 +42,8 @@ where
             .map(Vertex::Id)
             .collect();
 
+        // the presence of multiple edges could have increased the indegree originally
+        // since hashset deletes the multiple edges -> we only need its size
         let indegree: usize = sources.len();
 
         let targets: std::collections::HashSet<Vertex<G::NodeId>> = g
