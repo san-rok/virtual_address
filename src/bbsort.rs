@@ -95,6 +95,11 @@ where
     );
     // reading and converting the data (with error propagation)
     let vag = to_vag(g, entry)?;
+    assert_eq!(
+        vag.nodes().len(),
+        g.node_identifiers().count(),
+        "Vag node count and graph node count does not match"
+    );
 
     // if there exists a node which we can not reach from entry -> error
     let unreachable = vag.unreachable_from_start();
@@ -110,6 +115,7 @@ where
     }
 
     let topsort = vag.weighted_order();
+    assert_eq!(topsort.len(), g.node_identifiers().count());
     Ok(topsort)
 }
 
