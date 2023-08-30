@@ -100,6 +100,7 @@ where
         g.node_identifiers().count(),
         "Vag node count and graph node count does not match"
     );
+    log::debug!("{vag:#x?}");
 
     // if there exists a node which we can not reach from entry -> error
     let unreachable = vag.unreachable_from_start();
