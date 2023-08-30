@@ -36,19 +36,27 @@ where
     // going over all the vertices of the given input graph
     // we collect the relevant data in a hashmap, which will be used later in the VAGraph instance
     for block in g.node_identifiers() {
+
+        let sources: std::collections::HashSet<Vertex<G::NodeId>> = g
+            .neighbors_directed(block, petgraph::Direction::Incoming)
+            .map(Vertex::Id)
+            .collect();
+
+        let indegree: usize = sources.len();
+
+        let targets: std::collections::HashSet<Vertex<G::NodeId>> = g
+            .neighbors_directed(block, petgraph::Direction::Outgoing)
+            .map(Vertex::Id)
+            .collect();
+
         nodes.insert(
             Vertex::Id(block),
             NoInstrBasicBlock::<G::NodeId>::new(
                 Vertex::Id(block),
                 g.weight(block),
-                g.neighbors_directed(block, petgraph::Direction::Incoming)
-                    .map(Vertex::Id)
-                    .collect(),
-                g.neighbors_directed(block, petgraph::Direction::Outgoing)
-                    .map(Vertex::Id)
-                    .collect(),
-                g.neighbors_directed(block, petgraph::Direction::Incoming)
-                    .count(),
+                sources,
+                targets,
+                indegree,
             ),
         );
     }
@@ -234,6 +242,7 @@ mod test {
 
     #[test]
     fn missing_nodes() {
+        env_logger::try_init();
         // test dags
         let file = std::fs::File::open("badgraph.yaml").unwrap();
         let vags: Vec<UnwrappedVAGraph<u64>> = serde_yaml::from_reader(file).unwrap();
