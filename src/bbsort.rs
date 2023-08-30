@@ -89,6 +89,10 @@ where
     G: IntoNodeIdentifiers + IntoNeighbors + IntoNeighborsDirected + NodeWeight<Node = G::NodeId>,
     <G as GraphBase>::NodeId: Copy + Eq + Debug + Hash + Ord,
 {
+    log::debug!(
+        "Sorting graph with {} nodes. Entry: {entry:x?}",
+        g.node_identifiers().count()
+    );
     // reading and converting the data (with error propagation)
     let vag = to_vag(g, entry)?;
 
@@ -229,7 +233,8 @@ mod test {
         let vag: VirtualAddressGraph<u64> = vags[0].to_vag();
         // let vags: Vec<VirtualAddressGraph<u64>> = vags.iter().map(|x| x.to_vag()).collect();
 
-        let mut f = std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
+        let mut f =
+            std::fs::File::create("/home/san-rok/projects/virtual_address/test.dot").unwrap();
         vag.render_to(&mut f).unwrap();
         // dot -Tsvg test.dot > test.svg
 
@@ -237,7 +242,10 @@ mod test {
         assert_eq!(vag.nodes().len(), topsort.len());
 
         println!("{:#x?}", vag.nodes());
-        println!("{}", cfg_cost(&vag, Vertex::Id(0x180025fc0), &topsort).unwrap());
+        println!(
+            "{}",
+            cfg_cost(&vag, Vertex::Id(0x180025fc0), &topsort).unwrap()
+        );
     }
 
     #[test]
