@@ -3,16 +3,15 @@ use crate::vagraph::vag::*;
 
 // generic functions
 
+use kendalls::tau_b;
+use petgraph::visit::{GraphBase, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers};
 use std::cmp::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::default::Default;
 use std::error::Error;
 use std::fmt::{Debug, Display, LowerHex};
 use std::hash::Hash;
-
-use petgraph::visit::{GraphBase, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers};
-
-use kendalls::tau_b;
 
 // no restrictions on NodeId, EdgeId, etc here -> all goes to VAG
 
@@ -32,14 +31,14 @@ where
     }
 
     let mut nodes: HashMap<Vertex<G::NodeId>, NoInstrBasicBlock<G::NodeId>> = HashMap::new();
+    let valid_nodes: HashSet<G::NodeId> = g.node_identifiers().collect();
 
     // going over all the vertices of the given input graph
     // we collect the relevant data in a hashmap, which will be used later in the VAGraph instance
     for block in g.node_identifiers() {
-
         let sources: std::collections::HashSet<Vertex<G::NodeId>> = g
             .neighbors_directed(block, petgraph::Direction::Incoming)
-            .map(Vertex::Id)
+            .filter_map(|id| valid_nodes.contains(&id).then_some(Vertex::Id(id)))
             .collect();
 
         // the presence of multiple edges could have increased the indegree originally
@@ -48,7 +47,7 @@ where
 
         let targets: std::collections::HashSet<Vertex<G::NodeId>> = g
             .neighbors_directed(block, petgraph::Direction::Outgoing)
-            .map(Vertex::Id)
+            .filter_map(|id| valid_nodes.contains(&id).then_some(Vertex::Id(id)))
             .collect();
 
         nodes.insert(
@@ -63,14 +62,15 @@ where
         );
     }
 
-    let mut vag: VirtualAddressGraph<G::NodeId> =
-        VirtualAddressGraph::new(Vertex::Id(entry), nodes);
+    let vag: VirtualAddressGraph<G::NodeId> = VirtualAddressGraph::new(Vertex::Id(entry), nodes);
 
+    /*
     let outgoing_edges = vag.erase_outgoing_edges();
     log::debug!("the following edges leave the graph, hence deleted:");
     for (s, t) in outgoing_edges {
         log::debug!("{:x?} --> {:x?}", s, t);
     }
+    */
 
     Ok(vag)
 }
