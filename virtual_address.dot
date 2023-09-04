@@ -1,15 +1,5 @@
 digraph control_flow {
-    N0x96b4[label="address:\n       00000000000096b4\nbasic block:\n      00000000000096b4: inc r12\n      00000000000096b7: nop word ptr [rax+rax]\ntarget(s):\n      00000000000096c0\n"];
-    N0x96c0[label="address:\n       00000000000096c0\nbasic block:\n      00000000000096c0: cmp r12,1\n      00000000000096c4: je short 96dah\ntarget(s):\n      00000000000096c6\n      00000000000096da\n"];
-    N0x96c6[label="address:\n       00000000000096c6\nbasic block:\n      00000000000096c6: lea r15,[rdi+230h]\n      00000000000096cd: dec r12\n      00000000000096d0: call 9470h\n      00000000000096d5: mov rdi,r15\n      00000000000096d8: jmp short 96c0h\ntarget(s):\n      00000000000096da\n      00000000000096c0\n"];
-    N0x96da[label="address:\n       00000000000096da\nbasic block:\n      00000000000096da: mov rax,[rbx]\n      00000000000096dd: test rax,rax\n      00000000000096e0: je short 9701h\ntarget(s):\n      00000000000096e2\n      0000000000009701\n"];
-    N0x96e2[label="address:\n       00000000000096e2\nbasic block:\n      00000000000096e2: mov rdi,[rbx+8]\n      00000000000096e6: imul rsi,rax,230h\n      00000000000096ed: mov edx,8\n      00000000000096f2: pop rbx\n      00000000000096f3: pop r12\n      00000000000096f5: pop r13\n      00000000000096f7: pop r14\n      00000000000096f9: pop r15\n      00000000000096fb: jmp qword ptr [4ec08h]\ntarget(s):\n"];
-    N0x9701[label="address:\n       0000000000009701\nbasic block:\n      0000000000009701: pop rbx\n      0000000000009702: pop r12\n      0000000000009704: pop r13\n      0000000000009706: pop r14\n      0000000000009708: pop r15\n      000000000000970a: ret\ntarget(s):\n"];
-    N0x96b4 -> N0x96c0[label=""];
-    N0x96c0 -> N0x96c6[label=""];
-    N0x96c0 -> N0x96da[label=""];
-    N0x96c6 -> N0x96da[label=""];
-    N0x96c6 -> N0x96c0[label=""];
-    N0x96da -> N0x96e2[label=""];
-    N0x96da -> N0x9701[label=""];
+    N0x8840[label="address:\n       0000000000008840\nbasic block:\n      0000000000008840: lea rdi,[4f028h]\n      0000000000008847: lea rax,[4f028h]\n      000000000000884e: cmp rax,rdi\n      0000000000008851: je short 8868h\ntarget(s):\n      0000000000008853\n      0000000000008868\n"];
+    N0x8840 -> N0x8853[label=""];
+    N0x8840 -> N0x8868[label=""];
 }

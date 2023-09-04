@@ -36,7 +36,6 @@ where
     // going over all the vertices of the given input graph
     // we collect the relevant data in a hashmap, which will be used later in the VAGraph instance
     for block in g.node_identifiers() {
-
         let sources: std::collections::HashSet<Vertex<G::NodeId>> = g
             .neighbors_directed(block, petgraph::Direction::Incoming)
             .map(Vertex::Id)
